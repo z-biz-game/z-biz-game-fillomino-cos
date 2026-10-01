@@ -51,21 +51,136 @@ function rleDecode(pairs, len) {
   return b;
 }
 
+// ---- 两段式解码 ---------------------------------------------------------------------------
+// 第一段只管"这坨 JSON 是不是我们存过的那个形状"，第二段逐条把每条记录验完再收进来。
+// 一条坏记录只丢那一条：存档里有 5 个档的纪录、其中 master 那条是垃圾，那么其余 4 条照用，
+// master 退回"还没有纪录"。少了第二段就是 `Object.assign(defaults, JSON.parse(raw))` 那种写法——
+// resume.ink 被写成 null 时 rleDecode 直接抛异常，整局在启动那一刻冻死在白屏上。
+const dropped = [];
+
+function note(what) {
+  dropped.push(what);
+}
+
+function finite(v, min, max) {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : null;
+}
+
+function decodeSettings(raw) {
+  const out = { sound: true, reduceMotion: false };
+  if (!raw || typeof raw !== 'object') {
+    note('settings');
+    return out;
+  }
+  // 只有显式的布尔才作数：`sound: 0` / `sound: "off"` 这种脏值退回默认，而不是被当成 falsy 的"关"。
+  out.sound = typeof raw.sound === 'boolean' ? raw.sound : true;
+  out.reduceMotion = typeof raw.reduceMotion === 'boolean' ? raw.reduceMotion : false;
+  if (typeof raw.sound !== 'boolean') note('settings.sound');
+  if (typeof raw.reduceMotion !== 'boolean') note('settings.reduceMotion');
+  return out;
+}
+
+function decodeBest(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    note('best');
+    return out;
+  }
+  for (const [tier, rec] of Object.entries(raw)) {
+    if (!rec || typeof rec !== 'object') {
+      note(`best.${tier}`);
+      continue;
+    }
+    const ms = finite(rec.ms, 0, 1000 * 60 * 60 * 24);
+    const hints = finite(rec.hints, 0, 1e6);
+    const moves = finite(rec.moves, 0, 1e7);
+    if (ms === null || hints === null || moves === null) {
+      note(`best.${tier}`);
+      continue;
+    }
+    out[tier] = { ms, hints, moves, size: typeof rec.size === 'string' ? rec.size.slice(0, 12) : '', at: finite(rec.at, 0, Infinity) || 0 };
+  }
+  return out;
+}
+
+function decodeTotals(raw) {
+  const out = { solved: 0, hints: 0, ms: 0 };
+  if (!raw || typeof raw !== 'object') {
+    note('totals');
+    return out;
+  }
+  for (const k of Object.keys(out)) {
+    const n = finite(raw[k], 0, Number.MAX_SAFE_INTEGER);
+    if (n === null) note(`totals.${k}`);
+    else out[k] = n;
+  }
+  return out;
+}
+
+// 坏档实测（四发，见 commit 正文）：null、缺字段、类型错、越界值都只丢这一条。
+function decodeResume(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    note('resume');
+    return null;
+  }
+  // cells 决定 rleDecode 铺出多长的盘面：越界值 clamp 到 4096 会悄悄造出一块尺寸不对的棋盘，
+  // 所以这里不 clamp，越界就是坏档，整条丢掉。
+  const rawCells = raw.cells;
+  const cells = Number.isInteger(rawCells) && rawCells >= 0 && rawCells <= 4096 ? rawCells : null;
+  const elapsed = finite(raw.elapsedMs, 0, 1000 * 60 * 60 * 24) || 0;
+  if (cells === null || !raw.ink || !Array.isArray(raw.ink)) {
+    note(cells === null ? 'resume.cells' : 'resume.ink');
+    return null;
+  }
+  // 逐格取值域：埋方块的墨水是 0..最大块（≤8），一个 -1 或 250 会把 Uint8Array 涂成别的数字。
+  const ink = [];
+  for (let i = 0; i < raw.ink.length; i++) {
+    const v = raw.ink[i];
+    if (!Number.isInteger(v) || v < 0 || v > 255) {
+      note(`resume.ink[${i}]`);
+      return null;
+    }
+    ink.push(v);
+  }
+  if (ink.length % 2) {
+    note('resume.ink.odd');
+    return null;
+  }
+  return {
+    seed: typeof raw.seed === 'string' ? raw.seed : '',
+    tier: typeof raw.tier === 'string' ? raw.tier : 'trainee',
+    elapsedMs: elapsed,
+    cells,
+    ink,
+    moves: finite(raw.moves, 0, 1e7) || 0,
+    hints: finite(raw.hints, 0, 1e6) || 0,
+    at: finite(raw.at, 0, Infinity) || 0,
+  };
+}
+
 function load() {
+  // 每次解码都是一份新的坏记录清单：只在模块级数组上追加，第二次 load() 会把上一次的账一起报出来。
+  dropped.length = 0;
+  const base = defaults();
+  let parsed;
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return defaults();
-    const parsed = JSON.parse(raw);
-    const base = defaults();
-    return {
-      ...base,
-      ...parsed,
-      settings: { ...base.settings, ...(parsed.settings || {}) },
-      totals: { ...base.totals, ...(parsed.totals || {}) },
-    };
+    if (!raw) return base;
+    parsed = JSON.parse(raw);
   } catch {
-    return defaults();
+    note('json');
+    return base;
   }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    note('envelope');
+    return base;
+  }
+  return {
+    settings: decodeSettings(parsed.settings),
+    best: decodeBest(parsed.best),
+    totals: decodeTotals(parsed.totals),
+    resume: parsed.resume === undefined || parsed.resume === null ? null : decodeResume(parsed.resume),
+  };
 }
 
 export const Store = {
@@ -140,6 +255,17 @@ export const Store = {
   clearResume() {
     this.data.resume = null;
     this.save();
+  },
+
+  // 被丢掉的坏记录留在这一条里：验证脚本要能问出"垃圾档被丢了几条、丢了哪几条"，
+  // 否则"我们容错了"和"我们什么都没接住"在外部看是同一句话。
+  health() {
+    return { dropped: dropped.slice(), resume: !!this.data.resume, best: Object.keys(this.data.best).length };
+  },
+  // 只给对拍/测试用：换一份 localStorage 内容，重新走一遍两段式解码。
+  reload() {
+    this.data = load();
+    return this.data;
   },
 
   reset() {

@@ -5,8 +5,13 @@
 let ctx = null;
 let master = null;
 let enabled = true;
+// 计数是为了让"静音"这两个字可被验伪：关掉音效之后再按十次格子，这个数必须一动不动。
+let voices = 0;
+let resumes = 0;
 
 function audio() {
+  // 静音态连上下文都不必建：一个被建起来并被 resume 的 AudioContext 就是"假静音"的证据。
+  if (!enabled) return null;
   if (typeof AudioContext === 'undefined' && typeof webkitAudioContext === 'undefined') return null;
   if (!ctx) {
     const Ctor = typeof AudioContext !== 'undefined' ? AudioContext : webkitAudioContext;
@@ -19,7 +24,10 @@ function audio() {
       return null;
     }
   }
-  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  if (ctx.state === 'suspended') {
+    resumes++;
+    ctx.resume().catch(() => {});
+  }
   return ctx;
 }
 
@@ -28,10 +36,11 @@ function audio() {
 // belong to the same instrument.
 function tone({ f0, f1 = f0, dur = 0.12, type = 'sine', gain = 0.22, delay = 0 }) {
   const ac = audio();
-  if (!ac || !enabled) return;
+  if (!ac) return false;
   const t = ac.currentTime + delay;
   const osc = ac.createOscillator();
   const vol = ac.createGain();
+  voices++;
   osc.type = type;
   osc.frequency.setValueAtTime(f0, t);
   osc.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t + dur);
@@ -41,13 +50,33 @@ function tone({ f0, f1 = f0, dur = 0.12, type = 'sine', gain = 0.22, delay = 0 }
   osc.connect(vol).connect(master);
   osc.start(t);
   osc.stop(t + dur + 0.02);
+  return true;
 }
 
 export const Sound = {
+  // 真静音 = 停掉时钟 + 不再新建振荡器，而不是把 master gain 拧到 0：前者让已经排队的
+  // 包络也一起停在半空，后者只是把声音藏起来，节点照样在跑。
   setEnabled(v) {
-    enabled = !!v;
+    const on = !!v;
+    if (on !== enabled) {
+      enabled = on;
+      if (ctx) {
+        if (!on && ctx.state === 'running') ctx.suspend().catch(() => {});
+        if (on && ctx.state === 'suspended') {
+          resumes++;
+          ctx.resume().catch(() => {});
+        }
+      }
+    }
+    return on;
   },
   enabled: () => enabled,
+  stats: () => ({ enabled, voices, resumes, state: ctx ? ctx.state : 'none' }),
+  // 测试与对拍用的清零口：不重建上下文，只把计数器归零。
+  resetStats() {
+    voices = 0;
+    resumes = 0;
+  },
 
   place() {
     tone({ f0: 520, f1: 880, dur: 0.14, type: 'triangle', gain: 0.2 });

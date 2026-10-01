@@ -22,6 +22,22 @@ export class BoardView {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.geo = { cell: 0, x: 0, y: 0, w: 0, h: 0, dpr: 1 };
+    this.paper = null;
+  }
+
+  // The 格子纸 behind the board. Decoded async, so a first frame may land before it: the board
+  // simply paints flat and repaints once the image is here. If it never arrives (a blocked
+  // request, a canvas that cannot take a pattern) nothing else changes — the texture is the least
+  // load-bearing thing on this canvas, and the verdicts painted over it come from the engine.
+  loadPaper(src, onReady) {
+    const img = new Image();
+    img.onload = () => {
+      const pat = this.ctx.createPattern(img, 'repeat');
+      if (!pat) return;
+      this.paper = pat;
+      if (onReady) onReady();
+    };
+    img.src = src;
   }
 
   // The backing buffer is sized in device pixels while every draw call stays in CSS pixels: one
@@ -76,6 +92,20 @@ export class BoardView {
     roundRect(ctx, 0, 0, geo.w, geo.h, Radius.card);
     ctx.fillStyle = Palette.surface;
     ctx.fill();
+
+    // 格子纸, and it only ever survives in the ring around the grid: the loop below repaints every
+    // cell opaque, so an empty cell stays exactly Palette.bgBottom and a printed one exactly
+    // surfaceLift — which is what tools/scenarios.js samples pixel-for-pixel off this canvas. The
+    // texture is the desk the sheet lies on, never the squares themselves.
+    if (this.paper) {
+      ctx.save();
+      roundRect(ctx, 0, 0, geo.w, geo.h, Radius.card);
+      ctx.clip();
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = this.paper;
+      ctx.fillRect(0, 0, geo.w, geo.h);
+      ctx.restore();
+    }
 
     // The paper. A cell with no number on it stays the colour of an empty square, so "not written
     // yet" is never confused with "written as 0" — there is no such thing as a 0 in 埋方块.

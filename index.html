@@ -6,8 +6,31 @@
 <meta name="theme-color" content="#080B16" />
 <title>埋方块 · Fillomino 区域格数推理</title>
 <meta name="description" content="Fillomino 埋方块：每一块相连的同数区域，格数刚好等于它写着的那个数。每局唯一解、每局都能用逻辑推到底，提示只说推得出的那一步。" />
-<!-- Inline icon: without it the browser probes the Pages domain root for /favicon.ico and logs a 404. -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23080B16'/%3E%3Crect x='4' y='4' width='11' height='11' rx='2.5' fill='%231A3A57' stroke='%237BB8FF' stroke-width='2'/%3E%3Crect x='16' y='16' width='12' height='12' rx='2.5' fill='%23423318' stroke='%233DDC91' stroke-width='2'/%3E%3Ctext x='9.5' y='13' font-size='9' font-weight='700' fill='%23F2F5FB' text-anchor='middle' font-family='sans-serif'%3E2%3C/text%3E%3Ctext x='22' y='25.5' font-size='9' font-weight='700' fill='%23FFC85C' text-anchor='middle' font-family='sans-serif'%3E4%3C/text%3E%3C/svg%3E" />
+<meta name="color-scheme" content="dark" />
+<meta name="format-detection" content="telephone=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="埋方块" />
+<!-- 图标一律是盘上的真位图（assets/gen/gen_art.py 重画），不再有 data:SVG：SVG 当 favicon
+     在 iOS 与 Android 的桌面安装流程里都不被认作可用图标。 -->
+<link rel="icon" type="image/png" sizes="16x16" href="assets/icons/favicon-16.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="48x48" href="assets/icons/favicon-48.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png" />
+<link rel="manifest" href="manifest.webmanifest" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="埋方块 Fillomino" />
+<meta property="og:title" content="埋方块 · Fillomino 区域格数推理" />
+<meta property="og:description" content="格子里写的不是线索，是这块的面积。每局唯一解、每局都能用逻辑推到底。" />
+<meta property="og:image" content="assets/img/og-cover.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="埋方块的一局 5×5 满盘：每一块相连的同数区域，格数等于它写着的那个数。" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="埋方块 · Fillomino 区域格数推理" />
+<meta name="twitter:description" content="每局唯一解、每局都能用逻辑推到底的 Fillomino。" />
+<meta name="twitter:image" content="assets/img/og-cover.png" />
 <link rel="stylesheet" href="css/game.css" />
 </head>
 <body>
@@ -69,9 +92,26 @@
           <span id="stat-name" class="puzzle-name">—</span>
           <span id="stat-tier" class="chip">—</span>
           <span id="stat-time" class="chip mono">00:00</span>
+          <div class="hud">
+            <button id="btn-pause" class="ghost" type="button" aria-pressed="false">暂停</button>
+            <button id="btn-help" class="ghost" type="button" aria-expanded="false">玩法</button>
+            <button id="btn-fullscreen" class="ghost" type="button" aria-pressed="false">全屏</button>
+          </div>
         </div>
         <div id="board-wrap">
           <canvas id="board" data-digit="1" role="img" aria-label="埋方块棋盘：拖动往格子里写数字"></canvas>
+          <!-- 动效层：光晕与彩带画在这张覆盖画布上，#board 的像素因此始终是引擎判定的原样。 -->
+          <canvas id="fx-layer" aria-hidden="true"></canvas>
+          <div id="pause-veil" hidden>
+            <div class="pause-card">
+              <h3>已暂停</h3>
+              <p id="pause-meta">用时停在这里，盘面不会替你多想一步。</p>
+              <div class="win-actions">
+                <button id="btn-resume-play" class="primary" type="button">继续</button>
+                <button id="btn-menu-3" class="ghost" type="button">回选档</button>
+              </div>
+            </div>
+          </div>
           <div id="win-veil" hidden>
             <div class="win-card">
               <h3>每一块都刚好长满了</h3>
@@ -92,6 +132,7 @@
         <div class="acts">
           <button id="btn-hint" class="primary" type="button">提示<span class="mono" id="hint-count">0</span></button>
           <button id="btn-undo" class="ghost" type="button">撤销</button>
+          <button id="btn-restart" class="ghost" type="button">重开本局</button>
           <button id="btn-new" class="ghost" type="button">换一局</button>
           <button id="btn-menu" class="ghost" type="button">回选档</button>
         </div>
@@ -128,6 +169,32 @@
     <span>每局唯一解 · 每局可用逻辑推到底 · 提示只给推得出的一步 — 由 <code>tools/verify.sh</code> 在真实浏览器里逐条断言。</span>
     <button id="btn-reset" class="link" type="button">清空存档</button>
   </footer>
+</div>
+
+<!-- 教学层：H / ? 或"玩法"按钮打开。四条规则与选档页同源，键位表是这一层独有的。 -->
+<div id="help-veil" hidden>
+  <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <h3 id="help-title">埋方块怎么玩</h3>
+    <p>格子里写的不是线索，是<b>这块的面积</b>：写着 5 的那一块，连自己数过来刚好五格。
+      挨着的两块写着同一个数，本来就是一块。相邻的同数格必须连成一块，所以一块的边界一旦确定，
+      它里面每一格都跟着定了。</p>
+    <ol class="rules">
+      <li><b>刚好长满</b>：一块够得着的地方连自己数过来刚好等于它写着的数，那这些格全都得写这个数。</li>
+      <li><b>必经之格</b>：这块要凑满 <i>n</i> 格，而绕开某一格它最多只能圈到 <i>n</i>−1 格，那这一格非写不可。</li>
+      <li><b>邻区已满</b>：挨着的一块已经占满它写着的数，你再塞一格它就多出一格，所以这一格不能是那个数。</li>
+      <li><b>只剩一个数</b>：把会被邻区挤掉的、长不满的都划掉，这一格还能写的数只剩一个。</li>
+    </ol>
+    <h4>键位</h4>
+    <ul class="keys">
+      <li><b>拖动</b> 连续写同一个数 · <b>1…8</b> 选数字 · <b>0</b> 擦除</li>
+      <li><b>Enter</b> / <b>空格</b> 选档页开局 · <b>空格</b> / <b>P</b> 暂停与继续</li>
+      <li><b>R</b> 重开本局 · <b>Z</b> 撤销 · <b>H</b> 提示 · <b>M</b> 静音 · <b>F</b> 全屏</li>
+      <li><b>?</b> 开合这一页 · <b>Esc</b> 回选档</li>
+    </ul>
+    <div class="win-actions">
+      <button id="btn-help-close" class="primary" type="button">开始推</button>
+    </div>
+  </div>
 </div>
 
 <script type="module" src="js/main.js"></script>

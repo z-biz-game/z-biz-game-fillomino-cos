@@ -21,11 +21,18 @@ body { touch-action: manipulation; }
 #app {
   max-width: 1180px;
   margin: 0 auto;
-  padding: var(--space-page) var(--space-page) var(--space-inner);
+  /* 刘海与圆角会吃掉页边。viewport 里已经写了 viewport-fit=cover，这几个 env() 才不会恒为 0：
+     不带 safe-area 的 padding 在 iPhone 上把顶栏两个开关推进了刘海里。 */
+  padding:
+    calc(var(--space-page) + env(safe-area-inset-top, 0px))
+    calc(var(--space-page) + env(safe-area-inset-right, 0px))
+    calc(var(--space-inner) + env(safe-area-inset-bottom, 0px))
+    calc(var(--space-page) + env(safe-area-inset-left, 0px));
   display: flex;
   flex-direction: column;
   gap: var(--space-card);
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
@@ -63,6 +70,13 @@ button {
   border: 1px solid var(--line);
   background: var(--surface);
   padding: 10px 16px;
+  /* 44×44 是手指的最低可命中率，不是视觉尺寸：一个"清空存档"的文字链在 12px 字号下
+     实际只有 15px 高，剩下的用 padding 撑到 44，而不是把字放大。 */
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: background var(--dur-tap) var(--ease-ease), border-color var(--dur-tap) var(--ease-ease), transform var(--dur-tap) var(--ease-spring);
 }
 
@@ -107,7 +121,10 @@ main { flex: 1; }
 }
 
 .reduce-motion .view,
-.reduce-motion button { animation: none; transition: none; }
+.reduce-motion button,
+.reduce-motion #win-veil,
+.reduce-motion #pause-veil,
+.reduce-motion #help-veil { animation: none; transition: none; }
 
 /* menu */
 
@@ -236,7 +253,16 @@ main { flex: 1; }
   padding: var(--space-card);
 }
 
-.stage-head { display: flex; align-items: center; gap: 10px; }
+/* Wraps rather than overflows: the page must stay scrollWidth == clientWidth at 1024x620, and
+   the HUD is three more buttons on a row that already carries the name and two chips. */
+.stage-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-gutter);
+  margin-left: auto;
+}
 
 .puzzle-name { font-weight: 700; letter-spacing: 0.08em; }
 
@@ -250,6 +276,18 @@ main { flex: 1; }
 }
 
 #board-wrap { position: relative; align-self: center; }
+
+/* The animation layer rides on top of the board and takes nothing from it: pointer-events none,
+   so a tap still lands on #board, and a z-index below the veils, so a paused or won board still
+   covers the confetti instead of the confetti covering it. */
+#fx-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
 
 #board {
   display: block;
@@ -271,6 +309,7 @@ main { flex: 1; }
 #win-veil {
   position: absolute;
   inset: 0;
+  z-index: 4;
   display: grid;
   place-items: center;
   background: rgba(8, 11, 22, 0.78);
@@ -291,6 +330,32 @@ main { flex: 1; }
 .win-card p { margin: 0 0 8px; font-size: 13px; color: var(--ink-dim); }
 .win-record { color: var(--success) !important; font-weight: 700; }
 .win-actions { display: flex; gap: var(--space-gutter); justify-content: center; }
+
+/* Pausing blanks the board it covers. The digits are the puzzle — a scrim you can still read
+   through only pauses the clock, and a frozen clock while the board is still on screen is a
+   screenshot, not a pause. */
+#pause-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 11, 22, 0.94);
+  border-radius: var(--radius-card);
+  animation: rise var(--dur-tap) var(--ease-ease) both;
+}
+
+.pause-card {
+  text-align: center;
+  padding: var(--space-card);
+  border: 1px solid var(--line-heavy);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  max-width: 86%;
+}
+
+.pause-card h3 { margin: 0 0 6px; font-size: 18px; letter-spacing: 0.12em; }
+.pause-card p { margin: 0 0 10px; font-size: 12.5px; color: var(--ink-dim); line-height: 1.6; }
 
 .panel {
   display: flex;
@@ -315,6 +380,7 @@ main { flex: 1; }
 
 .digit {
   position: relative;
+  min-height: 44px;
   padding: 10px 0;
   text-align: center;
   font-weight: 700;
@@ -422,6 +488,86 @@ main { flex: 1; }
 }
 
 .foot code { font-family: var(--font-mono); color: var(--ink-dim); }
+
+/* ---------- 教学层 ---------- */
+
+/* Fixed, not absolute: this card is a sibling of #app, so it has to cover the viewport rather
+   than flow inside a column that may already be scrolled. It scrolls on its own because the four
+   rules plus the key list are taller than a 620px-tall window. */
+#help-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: calc(var(--space-page) + env(safe-area-inset-top, 0px))
+    calc(var(--space-page) + env(safe-area-inset-right, 0px))
+    calc(var(--space-inner) + env(safe-area-inset-bottom, 0px))
+    calc(var(--space-page) + env(safe-area-inset-left, 0px));
+  background: rgba(8, 11, 22, 0.84);
+  animation: rise var(--dur-tap) var(--ease-ease) both;
+}
+
+.help-card {
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  padding: var(--space-card);
+}
+
+.help-card h3 { margin: 0 0 8px; font-size: 19px; letter-spacing: 0.1em; }
+.help-card h4 { margin: var(--space-inner) 0 6px; font-size: 12px; letter-spacing: 0.12em; color: var(--ink-dim); }
+.help-card > p { margin: 0 0 10px; font-size: 13px; line-height: 1.75; color: var(--ink-dim); }
+.help-card > p b { color: var(--ink); }
+.help-card ol, .help-card ul { margin: 0; padding-left: 20px; display: grid; gap: 7px; }
+.help-card li { font-size: 12.5px; line-height: 1.7; color: var(--ink-dim); }
+.help-card li b, .keys b { color: var(--ink); font-weight: 700; }
+.help-card .rules b { color: var(--accent); }
+.help-card i { font-family: var(--font-mono); font-style: normal; }
+.help-card .win-actions { margin-top: var(--space-card); justify-content: flex-end; }
+
+/* ---------- 全屏 ---------- */
+
+/* A fullscreen element is painted over the UA's black backdrop unless it carries its own
+   background, so the page gradient is repeated here rather than "inherited". `.is-fullscreen`
+   on <body> is the mirror main.js keeps for engines that expose only webkitRequestFullscreen —
+   there document.fullscreenElement never turns true, so the class is the only signal. */
+#app:fullscreen,
+#app:-webkit-full-screen,
+body.is-fullscreen #app {
+  max-width: none;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 62%, var(--surface) 100%);
+}
+
+body.is-fullscreen { overflow: hidden; }
+
+/* ---------- 减少动效（系统偏好，与设置里的"动效 省"同源） ---------- */
+
+/* The stored setting paints the same outcome via body.reduce-motion; this is the half the player
+   never had a chance to opt into — the OS already said no. Both paths have to land on "nothing
+   moves", not on "it moves faster", or the option is a lie about what it does. */
+@media (prefers-reduced-motion: reduce) {
+  .view,
+  #win-veil,
+  #pause-veil,
+  #help-veil {
+    animation: none;
+  }
+
+  button,
+  #fx-layer {
+    transition: none;
+  }
+
+  html { scroll-behavior: auto; }
+}
 
 @media (max-width: 900px) {
   #view-game { grid-template-columns: 1fr; }

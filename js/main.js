@@ -2,19 +2,21 @@
 // verification harness drives. No rule about the board lives here — every judgement comes from
 // js/engine/fillomino.js through js/ui/game.js.
 
-import { Palette, DigitFill, Cell, Radius, applyThemeVars, setReduceMotion, systemPrefersReducedMotion } from './theme.js';
+import { Palette, DigitFill, Cell, Radius, applyThemeVars, setReduceMotion, systemPrefersReducedMotion, prefersReducedMotion } from './theme.js';
 import { Sound } from './audio/synth.js';
 import { Store } from './store.js';
 import { TIERS, tierFor, makePuzzle, generate, plantSolution, pruneClues, mix } from './engine/generate.js';
 import * as Engine from './engine/fillomino.js';
 import { countSolutions } from './engine/count.js';
 import { BoardView } from './render/board.js';
+import { Fx, SIM_STEP } from './render/fx.js';
 import { Game, digitName, OPEN, NO_CLUE } from './ui/game.js';
 
 const VERSION = '1.0.0';
 
 const $ = (sel) => document.querySelector(sel);
 const el = {
+  app: $('#app'),
   viewMenu: $('#view-menu'),
   viewGame: $('#view-game'),
   tiers: $('#tier-list'),
@@ -40,20 +42,57 @@ const el = {
   winVeil: $('#win-veil'),
   winMeta: $('#win-meta'),
   winRecord: $('#win-record'),
+  pauseVeil: $('#pause-veil'),
+  pauseMeta: $('#pause-meta'),
+  pause: $('#btn-pause'),
+  full: $('#btn-fullscreen'),
+  help: $('#btn-help'),
+  helpVeil: $('#help-veil'),
   wrap: $('#board-wrap'),
   canvas: $('#board'),
+  fx: $('#fx-layer'),
 };
 
 const view = new BoardView(el.canvas);
+const fx = new Fx(el.fx);
 let game = null;
 let pulse = null;
 let stroke = null;
 let startedAt = 0;
 let baseElapsed = 0;
 let ticker = 0;
+let paused = false;
+let raf = 0;
+let lastTs = 0;
 
 const clock = () => baseElapsed + (startedAt ? Date.now() - startedAt : 0);
 const running = () => !!startedAt;
+// 暂停与胜利之后，任何改变棋盘输入的路径都要先问这一句。漏掉一处，就是"暂停还在偷写数字"。
+const blocked = () => paused || !game || game.status === 'won';
+
+// ---- 动效循环：唯一的推进者是 rAF 的时间戳 ---------------------------------------------------
+
+function frame(ts) {
+  raf = 0;
+  if (paused || !game) {
+    lastTs = 0;
+    return;
+  }
+  const now = ts / 1000;
+  // 首帧不白吃：kick() 里已经把 lastTs 摆到当前时刻，所以这里拿到的永远是真实间隔。
+  const elapsed = lastTs ? Math.min(0.25, now - lastTs) : 0;
+  lastTs = now;
+  if (elapsed > 0) fx.advance(elapsed);
+  fx.draw((t) => view.cellRect(t));
+  if (fx.active()) raf = requestAnimationFrame(frame);
+  else lastTs = 0;
+}
+
+function kick() {
+  if (raf || paused || !fx.active()) return;
+  lastTs = (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) / 1000;
+  raf = requestAnimationFrame(frame);
+}
 
 function fmtMs(ms) {
   const s = Math.floor(ms / 1000);
@@ -70,7 +109,9 @@ function draw() {
   if (!game) return;
   const { w, h } = availBox();
   view.resize(game, w, h);
+  fx.resize(view.geo);
   view.draw(game, { pulse, preview: stroke && stroke.items.length ? { cells: stroke.items.map((i) => i.cell) } : null });
+  if (fx.active()) fx.draw((t) => view.cellRect(t));
 }
 
 // One place writes the readouts, so a stat can never be updated by half the file.
@@ -151,7 +192,7 @@ function renderPalette() {
 }
 
 function setDigit(value) {
-  if (!game) return false;
+  if (!game || paused) return false;
   if (!game.setDigit(value)) return false;
   for (const b of el.palette.querySelectorAll('.digit')) {
     b.setAttribute('aria-pressed', String(Number(b.dataset.digit) === game.digit));
@@ -176,6 +217,7 @@ function showHint(info) {
       if (pulse && pulse.cell === info.cell) pulse = null;
       draw();
     }, 1600);
+    if (fx.hint([info.cell], 'rgba(255,92,122,0.9)')) kick();
     Sound.conflict();
     return;
   }
@@ -187,6 +229,9 @@ function showHint(info) {
     if (pulse === mine) pulse = null;
     draw();
   }, 1600);
+  // 光晕画在覆盖层上、按虚拟秒淡出；省动效时 hint() 直接返回 false，一个粒子都不会生成。
+  const area = game.areas.find((a) => a.cells.includes(info.cell));
+  if (fx.hint(area ? area.cells : [info.cell])) kick();
   Sound.hint();
 }
 
@@ -204,8 +249,77 @@ function onWin() {
   el.winMeta.textContent = `${tierFor(game.puzzle.tier).name} · ${game.w}×${game.h} · ${fmtMs(ms)} · ${game.moves} 步 · 提示 ${game.hints} 次`;
   el.winRecord.textContent = better ? '新纪录：这一局比存档里的更不求人。' : '未破纪录：同档先比提示次数。';
   el.winVeil.hidden = false;
+  if (fx.burst() > 0) kick();
   Sound.win();
   renderRecords();
+}
+
+// ---- 暂停 / 全屏 / 教学 ----------------------------------------------------------------------
+
+// 暂停要停三样：走时的钟、动效的推进器、以及一切改棋盘输入的入口。少停一样，就是
+// "遮罩盖着、时间在跑、数字还在写"那种假暂停。
+function setPaused(v) {
+  const on = !!v;
+  if (on === paused) return paused;
+  // 没有牌局（或已经赢了）就不该被暂停；但"解除暂停"永远放行——回选档、清空存档之后
+  // 若把解除也一起挡掉，下一局就开在一颗 paused=true 的死棋上。
+  if (on && (!game || game.status === 'won')) return paused;
+  paused = on;
+  if (on) {
+    stopClock();
+    flushResume();
+    if (raf) {
+      cancelAnimationFrame(raf);
+      raf = 0;
+    }
+    lastTs = 0;
+  } else {
+    startClock();
+    if (fx.active()) kick();
+  }
+  el.pauseVeil.hidden = !on;
+  if (on) el.pauseMeta.textContent = `用时停在 ${fmtMs(clock())}，盘面不会替你多想一步。`;
+  el.pause.textContent = on ? '继续' : '暂停';
+  el.pause.setAttribute('aria-pressed', String(on));
+  document.body.classList.toggle('is-paused', on);
+  return paused;
+}
+
+const fullscreenNode = () => document.fullscreenElement || document.webkitFullscreenElement;
+
+function syncFullscreen() {
+  const on = !!fullscreenNode();
+  el.full.textContent = on ? '退出全屏' : '全屏';
+  el.full.setAttribute('aria-pressed', String(on));
+  document.body.classList.toggle('is-fullscreen', on);
+  draw();
+  return on;
+}
+
+// 按钮 id 必须挂在真实存在的节点上（el.full），并且拿不到权限时只是不动，不抛。
+async function toggleFullscreen() {
+  const node = fullscreenNode();
+  try {
+    if (node) {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) await exit.call(document);
+    } else {
+      const target = el.app || document.documentElement;
+      const req = target.requestFullscreen || target.webkitRequestFullscreen;
+      if (!req) return syncFullscreen();
+      await req.call(target, { navigationUI: 'hide' });
+    }
+  } catch {
+    /* 浏览器拒绝（非用户手势、iframe 没授权）就保持原样，游戏照玩 */
+  }
+  return syncFullscreen();
+}
+
+function toggleHelp(v) {
+  const on = v === undefined ? el.helpVeil.hidden : !!v;
+  el.helpVeil.hidden = !on;
+  el.help.setAttribute('aria-expanded', String(on));
+  return on;
 }
 
 function afterStep(soundKey) {
@@ -219,7 +333,7 @@ function afterStep(soundKey) {
 }
 
 function useHint() {
-  if (!game || game.status === 'won') return null;
+  if (blocked()) return null;
   const before = game.hints;
   const info = game.hint();
   if (!info) return null;
@@ -234,7 +348,7 @@ function useHint() {
 }
 
 function undo() {
-  if (!game) return null;
+  if (blocked()) return null;
   const step = game.undo();
   if (!step) return null;
   pulse = null;
@@ -251,6 +365,14 @@ function begin({ tier = 'trainee', seed = null, resume = null } = {}) {
   game = new Game(puzzle);
   pulse = null;
   stroke = null;
+  // 重开必须把时钟、动效累加器、粒子、暂停态一起清干净：只 new 一个 Game 而留着
+  // 上一局的 accum/particles，等于把上一局的时间尾巴带进新的一局。
+  paused = false;
+  el.pauseVeil.hidden = true;
+  el.pause.textContent = '暂停';
+  el.pause.setAttribute('aria-pressed', 'false');
+  document.body.classList.remove('is-paused');
+  fx.reset();
   el.winVeil.hidden = true;
   baseElapsed = 0;
   if (resume) {
@@ -274,6 +396,7 @@ function show(which) {
   el.viewMenu.hidden = which !== 'menu';
   el.viewGame.hidden = which !== 'game';
   if (which === 'menu') {
+    setPaused(false);
     stopClock();
     renderMenu();
   }
@@ -343,6 +466,8 @@ function applySettings() {
   Sound.setEnabled(Store.setting('sound'));
   const reduce = !!Store.setting('reduceMotion') || systemPrefersReducedMotion();
   setReduceMotion(!!Store.setting('reduceMotion'));
+  // 省动效不是"把动画调快"：粒子与光晕在这条分支里根本不生成，循环也就一次都不会启动。
+  fx.setReducedMotion(reduce);
   document.body.classList.toggle('reduce-motion', reduce);
   $('#btn-sound').setAttribute('aria-pressed', String(!!Store.setting('sound')));
   $('#btn-sound').textContent = Store.setting('sound') ? '音效 开' : '音效 关';
@@ -370,7 +495,7 @@ function unpreview() {
 }
 
 function strokeStart(ev) {
-  if (!game || game.status === 'won') return;
+  if (blocked()) return;
   const t = view.hitCell(ev.clientX, ev.clientY);
   if (t < 0) return;
   ev.preventDefault();
@@ -415,15 +540,53 @@ el.canvas.addEventListener('pointercancel', () => {
 });
 el.canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
 
+// 没有 PointerEvent 的老浏览器（iOS Safari < 13 一类）走 touch/mouse 回落。两条路都只喂
+// clientX/clientY 给 hitCell，而 hitCell 内部是 getBoundingClientRect 换算的，所以 CSS 缩放
+// 下点 A 打 B 这件事在这两个分支里都不成立。
+if (typeof window.PointerEvent === 'undefined') {
+  const first = (ev) => (ev.touches && ev.touches[0]) || (ev.changedTouches && ev.changedTouches[0]) || ev;
+  el.canvas.addEventListener('touchstart', (ev) => strokeStart(first(ev)), { passive: false });
+  el.canvas.addEventListener('touchmove', (ev) => strokeMove(first(ev)), { passive: false });
+  el.canvas.addEventListener('touchend', strokeEnd);
+  el.canvas.addEventListener('touchcancel', () => {
+    if (!stroke) return;
+    unpreview();
+    stroke = null;
+    syncAll();
+  });
+  el.canvas.addEventListener('mousedown', strokeStart);
+  el.canvas.addEventListener('mousemove', (ev) => {
+    if (ev.buttons) strokeMove(ev);
+  });
+  el.canvas.addEventListener('mouseup', strokeEnd);
+}
+
+// 重开 = 同一张盘从头再来。它必须走 begin() 这条完整复位的路（时钟、累加器、粒子、笔迹、
+// 暂停态、已写数字全部归零），而不是只把格子擦空——那样时间会接着上一局继续走。
+function restart() {
+  if (!game) return null;
+  return begin({ tier: game.puzzle.tier, seed: game.puzzle.originSeed });
+}
+
 $('#btn-hint').addEventListener('click', useHint);
 $('#btn-undo').addEventListener('click', undo);
 $('#btn-new').addEventListener('click', () => begin({ tier: game ? game.puzzle.tier : 'trainee' }));
+$('#btn-restart').addEventListener('click', restart);
 $('#btn-menu').addEventListener('click', () => {
   flushResume();
   show('menu');
 });
 $('#btn-menu-2').addEventListener('click', () => show('menu'));
 $('#btn-again').addEventListener('click', () => begin({ tier: game ? game.puzzle.tier : 'trainee' }));
+$('#btn-pause').addEventListener('click', () => setPaused(!paused));
+$('#btn-fullscreen').addEventListener('click', () => toggleFullscreen());
+$('#btn-help').addEventListener('click', () => toggleHelp());
+$('#btn-help-close').addEventListener('click', () => toggleHelp(false));
+$('#btn-resume-play').addEventListener('click', () => setPaused(false));
+$('#btn-menu-3').addEventListener('click', () => {
+  flushResume();
+  show('menu');
+});
 $('#btn-resume').addEventListener('click', () => {
   const r = Store.resume();
   if (!r) return;
@@ -445,23 +608,160 @@ $('#btn-reset').addEventListener('click', () => {
   show('menu');
 });
 
-window.addEventListener('keydown', (ev) => {
-  if (ev.target && /input|textarea/i.test(ev.target.tagName)) return;
-  if (ev.key === 'h') useHint();
-  else if (ev.key === 'z') undo();
-  else if (ev.key === '0' || ev.key === 'Backspace' || ev.key === 'Delete') setDigit(OPEN);
-  else if (/^[1-8]$/.test(ev.key) && game && Number(ev.key) <= game.maxK) setDigit(Number(ev.key));
-});
+function toggleSound() {
+  Store.setSetting('sound', !Store.setting('sound'));
+  applySettings();
+  return !!Store.setting('sound');
+}
+
+// 菜单里的 Enter/Space：光标停在某个档上就开那一档，否则开第一档；有未完成的牌局先续牌局。
+function startFromMenu() {
+  const focused = document.activeElement;
+  if (focused && focused.classList && focused.classList.contains('tier')) {
+    begin({ tier: focused.dataset.tier });
+    return 'tier';
+  }
+  const r = Store.resume();
+  if (r) {
+    begin({ tier: r.tier, seed: r.seed, resume: r });
+    return 'resume';
+  }
+  begin({ tier: TIERS[0].key });
+  return TIERS[0].key;
+}
+
+function onKey(ev) {
+  if (ev.target && /input|textarea|select/i.test(ev.target.tagName)) return;
+  if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  const k = ev.key;
+  const inGame = !el.viewGame.hidden;
+  if (k === '?' || (k === '/' && ev.shiftKey)) {
+    ev.preventDefault();
+    toggleHelp();
+    return;
+  }
+  if (k === 'Escape') {
+    if (!el.helpVeil.hidden) toggleHelp(false);
+    else if (inGame) {
+      flushResume();
+      show('menu');
+    }
+    return;
+  }
+  if (k === 'h' || k === 'H') {
+    useHint();
+    return;
+  }
+  if (k === 'z' || k === 'Z') {
+    undo();
+    return;
+  }
+  if (k === 'p' || k === 'P') {
+    if (inGame) {
+      ev.preventDefault();
+      setPaused(!paused);
+    }
+    return;
+  }
+  if (k === ' ' || k === 'Spacebar') {
+    // 焦点在按钮上时让浏览器自己派发 click，别把"回车/空格按下这个钮"抢成"开局"。
+    if (ev.target && ev.target.tagName === 'BUTTON') return;
+    ev.preventDefault();
+    if (inGame) setPaused(!paused);
+    else startFromMenu();
+    return;
+  }
+  if (k === 'Enter') {
+    if (ev.target && ev.target.tagName === 'BUTTON') return;
+    ev.preventDefault();
+    if (inGame) setPaused(!paused);
+    else startFromMenu();
+    return;
+  }
+  if (k === 'r' || k === 'R') {
+    if (inGame) {
+      ev.preventDefault();
+      restart();
+    }
+    return;
+  }
+  if (k === 'm' || k === 'M') {
+    ev.preventDefault();
+    toggleSound();
+    return;
+  }
+  if (k === 'f' || k === 'F') {
+    ev.preventDefault();
+    toggleFullscreen();
+    return;
+  }
+  if (k === '0' || k === 'Backspace' || k === 'Delete') setDigit(OPEN);
+  else if (/^[1-8]$/.test(k) && game && Number(k) <= game.maxK) setDigit(Number(k));
+}
+
+window.addEventListener('keydown', onKey);
 
 window.addEventListener('resize', draw);
+document.addEventListener('fullscreenchange', syncFullscreen);
+document.addEventListener('webkitfullscreenchange', syncFullscreen);
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') flushResume();
+  if (document.visibilityState === 'hidden') {
+    flushResume();
+    // 切走就暂停：否则"离开十分钟回来"会白扣十分钟的用时，而用时是同档破纪录的第三把尺。
+    setPaused(true);
+  }
 });
 window.addEventListener('pagehide', flushResume);
 
+function registerServiceWorker() {
+  // file:// 下（Electron 直接 loadFile 就是这种形态）注册 SW 会抛 SecurityError，
+  // 未捕获的 promise rejection 会在控制台里长出一条红字。整段按协议跳过。
+  if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return false;
+  const url = new URL('sw.js', document.baseURI).href;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register(url).catch(() => {
+      /* 注册失败只是不可离线，游戏照玩 */
+    });
+  });
+  return true;
+}
+
+// manifest 的 shortcuts 指向 ?tier= / ?action=resume，这两条参数不接住的话，
+// 桌面图标上写的那两个入口就是假的。
+function bootFromUrl() {
+  let q;
+  try {
+    q = new URLSearchParams(location.search);
+  } catch {
+    return null;
+  }
+  if (q.get('action') === 'resume') {
+    const r = Store.resume();
+    if (r) {
+      begin({ tier: r.tier, seed: r.seed, resume: r });
+      return 'resume';
+    }
+  }
+  const tier = q.get('tier');
+  if (tier && TIERS.some((t) => t.key === tier)) {
+    begin({ tier });
+    return tier;
+  }
+  return null;
+}
+
+// Resolved off document.baseURI, not relative to this file's import map: the same build is served
+// both at / and under a /z-biz-game-fillomino-cos/ prefix, and a hardcoded path breaks only on CI.
+const asset = (rel) => new URL(rel, document.baseURI).href;
+
+fx.loadSprite(asset('assets/img/particles.png'));
+// The texture decodes async and asks for one repaint; until then the board paints flat.
+view.loadPaper(asset('assets/img/paper-grid.png'), draw);
 applyThemeVars();
 applySettings();
 renderMenu();
+registerServiceWorker();
+bootFromUrl();
 
 window.fillomino = {
   version: VERSION,
@@ -504,6 +804,23 @@ window.fillomino = {
   },
   elapsed: clock,
   state: () => (game ? { ...game.state(), elapsedMs: clock() } : null),
+  // 窗口状态挂出来给对拍用：暂停态、动效累加器、音频上下文状态、被丢掉的坏记录。
+  // 读不到这些，任何"行为成立"的判据都无法复验。
+  paused: () => paused,
+  setPaused,
+  restart,
+  running: () => running(),
+  fx: () => fx.snapshot(),
+  simStep: SIM_STEP,
+  looping: () => !!raf,
+  sound: () => Sound.stats(),
+  setSound: toggleSound,
+  fullscreen: () => !!fullscreenNode(),
+  toggleFullscreen,
+  help: () => !el.helpVeil.hidden,
+  toggleHelp,
+  storeHealth: () => Store.health(),
+  cellRect: (t) => (game ? view.cellRect(t) : null),
   cellAt: (x, y) => (game ? game.cellAt(x, y) : -1),
   valueOf: (t) => (game ? game.valueOf(t) : OPEN),
   digitName,

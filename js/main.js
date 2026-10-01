@@ -544,9 +544,20 @@ el.canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
 // clientX/clientY 给 hitCell，而 hitCell 内部是 getBoundingClientRect 换算的，所以 CSS 缩放
 // 下点 A 打 B 这件事在这两个分支里都不成立。
 if (typeof window.PointerEvent === 'undefined') {
-  const first = (ev) => (ev.touches && ev.touches[0]) || (ev.changedTouches && ev.changedTouches[0]) || ev;
-  el.canvas.addEventListener('touchstart', (ev) => strokeStart(first(ev)), { passive: false });
-  el.canvas.addEventListener('touchmove', (ev) => strokeMove(first(ev)), { passive: false });
+  // 回落路径上真正带坐标的是 Touch，但 Touch 没有 preventDefault：直接把 ev.touches[0] 当
+  // 事件喂给 strokeStart，那一发 ev.preventDefault() 就在第一根手指落下时抛 TypeError，
+  // 整条触屏线一笔都写不进去。所以归一化成"坐标 + 代理回原事件的 preventDefault"。
+  const touchArgs = (ev) => {
+    const t = (ev.touches && ev.touches[0]) || (ev.changedTouches && ev.changedTouches[0]) || ev;
+    return {
+      clientX: t.clientX,
+      clientY: t.clientY,
+      target: ev.target,
+      preventDefault: () => { if (ev.preventDefault) ev.preventDefault(); },
+    };
+  };
+  el.canvas.addEventListener('touchstart', (ev) => strokeStart(touchArgs(ev)), { passive: false });
+  el.canvas.addEventListener('touchmove', (ev) => strokeMove(touchArgs(ev)), { passive: false });
   el.canvas.addEventListener('touchend', strokeEnd);
   el.canvas.addEventListener('touchcancel', () => {
     if (!stroke) return;

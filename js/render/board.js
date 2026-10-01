@@ -64,11 +64,15 @@ export class BoardView {
 
   hitCell(clientX, clientY) {
     const rect = this.canvas.getBoundingClientRect();
-    const { cell, x, y } = this.geo;
+    const { cell, x, y, w, h } = this.geo;
     const game = this.game;
     if (!cell || !game) return -1;
-    const px = clientX - rect.left - x;
-    const py = clientY - rect.top - y;
+    // rect 是视口量出来的，geo 是画布自己的 CSS 尺寸，两者只在画布没被 CSS 压过时才相等。
+    // 先按这个比例把指点换回画布坐标系：漏掉这一步，"点 A 中 B" 只在窄屏上出现，桌面测不出来。
+    const sx = rect.width ? w / rect.width : 1;
+    const sy = rect.height ? h / rect.height : 1;
+    const px = (clientX - rect.left) * sx - x;
+    const py = (clientY - rect.top) * sy - y;
     if (px < 0 || py < 0) return -1;
     const gx = Math.floor(px / cell);
     const gy = Math.floor(py / cell);

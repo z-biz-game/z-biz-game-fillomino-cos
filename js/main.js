@@ -778,19 +778,19 @@ window.fillomino = {
   // The harness commits through the same path a pointer release does, so a scenario that passes
   // here has driven the real state machine rather than a copy of it.
   paintDigit(t, value) {
-    if (!game) return null;
+    if (blocked()) return null;
     const step = value === undefined ? game.tap(t) : game.paint(t, value);
     if (step) afterStep(step.value === OPEN ? 'erase' : 'place');
     return step;
   },
   stroke(cells, value) {
-    if (!game) return null;
+    if (blocked()) return null;
     const step = game.stroke(cells, value === undefined ? game.digit : value);
     if (step) afterStep(step.value === OPEN ? 'erase' : 'place');
     return step;
   },
   tap(t, digit) {
-    if (!game) return null;
+    if (blocked()) return null;
     const step = digit === undefined ? game.tap(t) : game.tap(t, digit);
     if (step) afterStep(step.writes[0].to === OPEN ? 'erase' : 'place');
     return step;

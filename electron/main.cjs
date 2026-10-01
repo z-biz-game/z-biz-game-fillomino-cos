@@ -11,6 +11,8 @@ function createWindow() {
     minHeight: 560,
     backgroundColor: '#080B16',
     title: '埋方块 Fillomino',
+    // Windows/Linux 的窗口与任务栏图标取这张真 PNG；macOS 忽略它、用 bundle 里的那套。
+    icon: path.join(__dirname, '..', 'assets', 'icons', 'icon-512.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

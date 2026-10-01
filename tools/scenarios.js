@@ -493,6 +493,30 @@
     await wait(24);
     eq('画布右下角外也不落子', num('#stat-moves'), mv4);
     eq('面板宽度跟着档位', getComputedStyle($('#palette')).gridTemplateColumns.trim().split(/\s+/).length, g.maxK + 1);
+
+    // --- 暂停停的是三样：走时的钟、动效的推进器、一切改棋盘的入口 ---
+    // 落子口只要有一处绕过 blocked()，"暂停写不进格子"就只是源码里的一句话：遮罩盖着、
+    // 数字照样落。所以三个 harness 口与真实 pointer 路径都得当场量一遍。
+    const blankNow = blanksOf(g.board).find((t) => A().valueOf(t) === en.OPEN);
+    const mvPause = num('#stat-moves');
+    const tPause = A().elapsed();
+    $('#btn-pause').click();
+    await wait(140);
+    ck('暂停前找得到一格空的', typeof blankNow === 'number', String(blankNow));
+    ck('暂停后遮罩出现', shown('#pause-veil'));
+    ck('暂停期间钟不走', Math.abs(A().elapsed() - tPause) < 40, `${tPause} → ${A().elapsed()}`);
+    eq('暂停期间 paintDigit 被拒', A().paintDigit(blankNow, 2), null);
+    eq('暂停期间 tap 被拒', A().tap(blankNow, 2), null);
+    eq('暂停期间 stroke 被拒', A().stroke([blankNow], 2), null);
+    await tap(blankNow);
+    eq('暂停期间点画布也不落子', num('#stat-moves'), mvPause);
+    eq('暂停期间那一格还是空的', A().valueOf(blankNow), en.OPEN);
+    $('#btn-pause').click();
+    await wait(40);
+    ck('解除暂停后遮罩收走', !shown('#pause-veil'));
+    ck('解除暂停后同一格写得进去', !!A().paintDigit(blankNow, 2));
+    eq('解除暂停后步数加一', num('#stat-moves'), mvPause + 1);
+    A().paintDigit(blankNow, en.OPEN);
     return report({ blanks: b.n - b.clues, maxK: g.maxK });
   };
 
@@ -1270,6 +1294,28 @@
     eq('大棋盘每一格中心都点得中', misses, 0);
     eq('格子四角也点得中（布局与命中同源）', edgeMisses, 0);
     eq('格外的点不命中任何格', v.hitCell(rect.left - 2, rect.top - 2), -1);
+    // 画布被 CSS 压过之后 rect 与 geo 就不等了：命中必须按这个比例换回画布坐标系，
+    // 否则"点 A 中 B"只在窄屏/缩放的设备上出现，而桌面窗口永远量不到。
+    eq('画布缩到 0.6 时每格中心仍点得中', (() => {
+      const canvas = v.canvas;
+      const before = canvas.style.transform;
+      const beforeOrigin = canvas.style.transformOrigin;
+      canvas.style.transformOrigin = '0 0';
+      canvas.style.transform = 'scale(0.6)';
+      let miss = 0;
+      try {
+        const box = canvas.getBoundingClientRect();
+        const scale = box.width / geo.w;
+        for (let t = 0; t < b.n; t++) {
+          const r = v.cellRect(t);
+          if (v.hitCell(box.left + (r.x + r.size / 2) * scale, box.top + (r.y + r.size / 2) * scale) !== t) miss++;
+        }
+      } finally {
+        canvas.style.transform = before;
+        canvas.style.transformOrigin = beforeOrigin;
+      }
+      return miss;
+    })(), 0);
     ck('cellRect 的坐标就是画布坐标', (() => {
       const r0 = v.cellRect(0);
       return r0.x === geo.x && r0.y === geo.y && r0.size === geo.cell;

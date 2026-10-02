@@ -20,7 +20,19 @@
     { "src": "assets/icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
   ],
   "shortcuts": [
-    { "name": "继续上一局", "short_name": "继续", "url": "./?action=resume", "description": "打开上次没推完的那张盘" },
-    { "name": "新手档开一局", "short_name": "新手", "url": "./?tier=trainee", "description": "5×5、最大 2 块的入门盘" }
+    {
+      "name": "继续上一局",
+      "short_name": "继续",
+      "url": "./?action=resume",
+      "description": "打开上次没推完的那张盘",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "新手档开一局",
+      "short_name": "新手",
+      "url": "./?tier=trainee",
+      "description": "5×5、最大 2 块的入门盘",
+      "icons": [{ "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }]
+    }
   ]
 }

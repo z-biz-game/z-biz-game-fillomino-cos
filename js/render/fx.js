@@ -98,7 +98,12 @@ export class Fx {
     // 那个 1e-9 是给边界留的：1.000s 恰等于 120 步，浮点会留下 1e-16 的亏空，舍入方向就由帧率决定了。
     // 容差 = 1e-9 步 ≈ 8.3ps，比任何一帧都小九个数量级；max(0, …) 保证负的余数买不到额外一步。
     const n = Math.max(0, Math.min(MAX_CATCHUP, Math.floor(this.accum / SIM_STEP + 1e-9)));
-    for (let i = 0; i < n; i++) this.step(SIM_STEP);
+    for (let i = 0; i < n; i++) {
+      this.step(SIM_STEP);
+      // 全灭即收口：30Hz 一帧补 4 步，若把已经没人可推进的那两步也跑掉，末态步数就按帧率分叉
+      // （实测 184/182/182）。定步长要连末态一起钉住，才叫帧率无关。
+      if (!this.active()) { this.accum = 0; return i + 1; }
+    }
     this.accum -= n * SIM_STEP;
     if (this.accum > SIM_STEP) this.accum = 0;
     return n;

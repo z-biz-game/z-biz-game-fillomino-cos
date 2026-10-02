@@ -619,10 +619,15 @@ $('#btn-reset').addEventListener('click', () => {
   show('menu');
 });
 
-function toggleSound() {
-  Store.setSetting('sound', !Store.setting('sound'));
+function setSoundEnabled(on) {
+  const want = on === undefined ? !Store.setting('sound') : !!on;
+  Store.setSetting('sound', want);
   applySettings();
   return !!Store.setting('sound');
+}
+
+function toggleSound() {
+  return setSoundEnabled(!Store.setting('sound'));
 }
 
 // 菜单里的 Enter/Space：光标停在某个档上就开那一档，否则开第一档；有未完成的牌局先续牌局。
@@ -825,7 +830,8 @@ window.fillomino = {
   simStep: SIM_STEP,
   looping: () => !!raf,
   sound: () => Sound.stats(),
-  setSound: toggleSound,
+  setSound: setSoundEnabled,
+  toggleSound,
   fullscreen: () => !!fullscreenNode(),
   toggleFullscreen,
   help: () => !el.helpVeil.hidden,

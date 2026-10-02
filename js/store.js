@@ -66,6 +66,12 @@ function finite(v, min, max) {
   return typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : null;
 }
 
+// 纪录类字段越界就是坏记录，不许 clamp：`ms: -5` 夹成 0 会造出一条以后永远破不了的纪录。
+// 与 decodeResume 里 cells 越界即丢整条的口径对齐。
+function exact(v, min, max) {
+  return typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : null;
+}
+
 function decodeSettings(raw) {
   const out = { sound: true, reduceMotion: false };
   if (!raw || typeof raw !== 'object') {
@@ -91,9 +97,9 @@ function decodeBest(raw) {
       note(`best.${tier}`);
       continue;
     }
-    const ms = finite(rec.ms, 0, 1000 * 60 * 60 * 24);
-    const hints = finite(rec.hints, 0, 1e6);
-    const moves = finite(rec.moves, 0, 1e7);
+    const ms = exact(rec.ms, 0, 1000 * 60 * 60 * 24);
+    const hints = exact(rec.hints, 0, 1e6);
+    const moves = exact(rec.moves, 0, 1e7);
     if (ms === null || hints === null || moves === null) {
       note(`best.${tier}`);
       continue;

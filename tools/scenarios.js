@@ -1307,9 +1307,20 @@
       return bs.length >= 6 && bs.every((x) => x.getBoundingClientRect().height >= 28);
     })(), JSON.stringify([...document.querySelectorAll('.acts button, #palette button, .top-actions button')].map((x) => Math.round(x.getBoundingClientRect().height))));
     ck('顶部按钮不重叠', (() => {
+      // 这一条原来写的是 `bs.length === 2`，把「不重叠」换成了「HUD 只有两枚按钮」。全屏开关接上
+      // 真按钮那天顶栏变成三枚（再加暂停是四枚），闸没有变宽、只是改口去审一个没人承诺过的数，
+      // 于是红了 4 笔 CI 而红字说的是「重叠」——读的人按句名去找叠放的按钮，找不到。
+      // 数量下限留着（`.every()` 在空集合上为真），但它不再是断言的全部内容；逐对真判。
+      // 判成对而不是相邻：顶栏会折行，第二行最左那枚的 left 可以小于第一行最右那枚的 right，
+      // 那是不重叠的两行、不是叠放——所以两个轴都要交叠才算。
       const bs = [...document.querySelectorAll('.top-actions button')].map((x) => x.getBoundingClientRect());
-      if (bs.length !== 2) return false;
-      for (let i = 1; i < bs.length; i++) if (bs[i].left < bs[i - 1].right - 1) return false;
+      if (bs.length < 2) return false;
+      for (let i = 0; i < bs.length; i++) {
+        for (let j = i + 1; j < bs.length; j++) {
+          const a = bs[i]; const b = bs[j];
+          if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) return false;
+        }
+      }
       return true;
     })(), JSON.stringify([...document.querySelectorAll('.top-actions button')].map((x) => { const r = x.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right), Math.round(r.width)]; })));
     ck('提示框不横向溢出', $('.hint-box').scrollWidth <= $('.hint-box').clientWidth + 1, `${$('.hint-box').scrollWidth} vs ${$('.hint-box').clientWidth}`);

@@ -9,8 +9,9 @@
     "dev": "node server.cjs 5255",
     "electron": "electron .",
     "engine": "node tools/engine-test.mjs",
-    "test": "node tools/engine-test.mjs && node tools/store-fx-test.mjs",
+    "test": "node tools/engine-test.mjs && node tools/store-fx-test.mjs && node tools/dom-behavior-test.mjs",
     "robust": "node tools/store-fx-test.mjs",
+    "behavior": "node tools/dom-behavior-test.mjs",
     "balance": "node tools/balance.mjs",
     "verify": "bash tools/verify.sh",
     "check": "for f in js/*.js js/*/*.js; do node --check \"$f\" || exit 1; done && node --check server.cjs && node --check electron/main.cjs && for f in tools/*.mjs tools/scenarios.js; do node --check \"$f\" || exit 1; done && echo OK"

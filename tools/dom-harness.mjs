@@ -248,6 +248,8 @@ export function setSeed(s = 0x2f8bdeca) { seed = s; }
 /** 真宏任务一格：虚拟 setTimeout 只在 pump 里被泵，await 异步链要用真 nextTick。 */
 export const tick = () => new Promise((r) => process.nextTick(r));
 
+/** 仓根（或 FILLONOMINO_SRC 指定的副本根）：闸要按盘上的 index.html 核对 id 清单。 */
+export const REPO_DIR = REPO;
 export const clockNow = () => VT;
 export const setClock = (v) => { VT = v; };
 export { reg, emit, listeners, windowShim, documentShim, audioStats, registry };

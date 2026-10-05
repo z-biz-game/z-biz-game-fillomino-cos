@@ -13,7 +13,9 @@
  * 写断言的纪律：每一条"没发生"的断言都配一条"发生过"的对照（省动效前真放过 46 个粒子、
  * 开声时真建过振荡器、缩放不换算真会打错格），否则一条恒真的断言与漏检等价。
  */
-import { loadGame, makePump, tick, reg, emit, listeners, windowShim, documentShim, audioStats } from './dom-harness.mjs';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { loadGame, makePump, tick, reg, emit, listeners, windowShim, documentShim, audioStats, REPO_DIR } from './dom-harness.mjs';
 
 const F = await loadGame();
 
@@ -204,6 +206,31 @@ console.log('\n### 8 reduceMotion：真分支，粒子与光晕一个都不生�
   ok(F.fx().particles === 0, `省动效下胜利不放彩带（粒子=${F.fx().particles}）`);
   ok(reg('#win-veil').hidden === false && F.state().status === 'won', `省动效不影响结算本身（${F.state().status}）`);
   emit(reg('#btn-motion'), 'click', {});
+}
+
+console.log('\n### 9 控件接线：id 双向核对 + 装载后真有 click 监听');
+{
+  const html = readFileSync(path.join(REPO_DIR, 'index.html'), 'utf8');
+  const mainSrc = readFileSync(path.join(REPO_DIR, 'js', 'main.js'), 'utf8');
+  const htmlIds = new Set([...html.matchAll(/\bid\s*=\s*"([^"]+)"/g)].map((m) => m[1]));
+  // 正向：main.js 用 $('#x') 引用到的每个 id 都必须真在 index.html 里。
+  // §2 点名的那类缺陷（requestFullscreen 绑到一个不存在的 id 上）字符串扫是扫不出来的，
+  // 因为 `$('#btn-fullscreen')` 拿不到节点时不报错，只是那个按钮从此永远不会响。
+  const refs = [...mainSrc.matchAll(/\$\('#([\w-]+)'\)/g)].map((m) => m[1]);
+  const ghostRefs = [...new Set(refs.filter((r) => !htmlIds.has(r)))];
+  ok(refs.length >= 12, `main.js 里 $("#id") 这种引用有 ${refs.length} 处（清单非空）`);
+  ok(ghostRefs.length === 0, `${new Set(refs).size} 个被引用的 id 全部在 index.html 上真实存在`, ghostRefs.join('、'));
+  // 反向：盘上每个静态 <button> 在装载之后都得挂着 click，否则它就是一块画在页面上的死像素。
+  const btnIds = [...html.matchAll(/<button[^>]*\bid="([^"]+)"/g)].map((m) => m[1]);
+  const dead = btnIds.filter((id) => {
+    const m = listeners.get(reg('#' + id));
+    return !(m && (m.click || []).length);
+  });
+  ok(btnIds.length >= 15, `index.html 里有 ${btnIds.length} 个带 id 的静态按钮（清单非空）`);
+  ok(dead.length === 0, `${btnIds.length} 个静态按钮装载后全部接了 click`, dead.join('、'));
+  // 判别性对照：不存在的 id 必须读不到监听，否则上面那条"全部接了"与恒真等价。
+  const ghost = listeners.get(reg('#btn-definitely-not-wired')) || {};
+  ok(!(ghost.click || []).length, '对照：没接线的那个名字确实读不到 click 监听');
 }
 
 console.log(`\n行为复验：${pass} 通过 / ${fails.length} 失败${fails.length ? ' —— ' + fails.join('、') : ''}`);

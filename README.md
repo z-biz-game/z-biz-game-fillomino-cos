@@ -17,9 +17,9 @@
 ```bash
 npm start            # http://127.0.0.1:5255/  零依赖静态服务器
 npm run check        # 每个源文件 node --check，解析不过就红
-npm test             # 引擎层 509 条断言（唯一解、逐格复核、可达性全枚举、档位）
+npm test             # 1060 条纯 node 断言：引擎 509 + 存档/动效定步长 129 + 关卡内三档对拍 370 + 行为复验 52
 npm run balance      # 难度阶梯实测：每档 40 局，六道关（`SAMPLES=12 npm run balance` 可缩样）
-npm run verify       # 门禁：上面两套 + 一个真 headless Chrome 跑 13 个场景遍、655 条断言
+npm run verify       # 门禁：上面四套 + 一个真 headless Chrome 跑 13 个场景遍、655 条断言
 ```
 
 `tools/verify.sh` 支持三种收窄方式，改哪一段就跑那一段：
@@ -127,14 +127,19 @@ SHOTS=local bash tools/verify.sh                                  # 顺手把三
 
 ## 门禁
 
-三样东西各自把关，任何一处走样都退出非零：
+四样东西各自把关，任何一处走样都退出非零：
 
 ```
 npm run check                       每个源文件能解析
-npm test                            509 条引擎断言
+npm test                            1060 条纯 node 断言，四套：
+                                      509 引擎（唯一解 / 逐格复核 / 可达性全枚举 / 档位）
+                                      129 存档解码 + 动效定步长（垃圾档只丢那一条）
+                                      370 关卡内 30/60/120Hz 三档对拍（含阴性对照）
+                                       52 行为复验（静音真停 AudioContext / 暂停真不推进 /
+                                          重开真复位 / 触屏按 CSS 缩放换算 / 控件接线）
 npm run balance                     六道关：阶梯单调 / 出货的盘独立计数同意 / 同盘重解同分 /
                                     种下的解过验收器 / 两道闸不空转 / 带只排序
-bash tools/verify.sh                上面两套 + 655 条真实浏览器断言
+bash tools/verify.sh                上面四套 + 655 条真实浏览器断言
 ```
 
 浏览器那 655 条来自 11 个场景、13 遍执行（`layout` 在三个窗口里各跑一遍），跑在真 headless Chrome 里，
@@ -194,6 +199,10 @@ js/store.js             localStorage（一个键）：设置、纪录、续局�
 js/theme.js             颜色与动效 token，图例与画布读同一份
 js/audio/synth.js       WebAudio 现场合成，零音频文件
 tools/engine-test.mjs   509 条引擎断言
+tools/store-fx-test.mjs   129 条：垃圾档解码与动效定步长
+tools/frame-ladder-test.mjs  370 条：关卡内 30/60/120Hz 同刻度对拍 + 阴性对照
+tools/dom-harness.mjs     最小 DOM/虚拟时钟桩（上面两套 node 行为闸共用）
+tools/dom-behavior-test.mjs  52 条：静音/暂停/重开/触屏缩放/键位/省动效/控件接线
 tools/balance.mjs       难度阶梯实测 + 六道关
 tools/scenarios.js      11 个浏览器场景的断言体（13 遍执行）
 tools/playtest.cjs      CDP 驱动（开页、求值、截图、跑场景）

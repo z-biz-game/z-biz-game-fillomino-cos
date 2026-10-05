@@ -167,7 +167,7 @@ verify / reachable` 全跑一遍，把结果存进 `this.ink / diag / areas / pr
 
 ```bash
 npm run check
-npm test                # 509 条引擎断言
+npm test                # 1060 条纯 node 断言（引擎 509 / 存档与定步长 129 / 三档对拍 370 / 行为 52）
 npm run balance         # 难度阶梯六道关（SAMPLES=12 可缩样）
 bash tools/verify.sh    # 655 条浏览器断言：11 场景 × 13 遍（layout 三个窗口）
 SCENARIOS="layout layout@1280x900 layout@1024x620" bash tools/verify.sh

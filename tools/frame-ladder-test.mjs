@@ -186,6 +186,11 @@ notes.push(`逐字段最大残差 ${worstDelta.toExponential(2)}（${worstField}
 
 // ④ 阴性对照：把 fx.js 里唯一还在吃帧 dt 的那一行 `accum += elapsed` 改成 `accum += SIM_STEP`，
 // 拷一份真源码到 /tmp 再跑同一把尺。判不红说明这把尺空跑。
+//
+// 第二发变异按规范 §6 的口径**记账而不钉成断言**：把 step() 里的 `Math.pow(0.985, dt * 60)`
+// 换成裸 `0.985`，本仓实测仍然 370 通过 / 0 失败（三档末态 steps=302/302/302，最大残差 6.37e-12）。
+// 这不是尺子空跑——step() 里的 dt 恒等于 SIM_STEP，把它换成常量在三档下同样地错，属结构性
+// 帧率无关，"该变异在本仓不可表达"。真正在吃帧 dt 的只有累加器那一行，而它一换就红。
 {
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'fillomino-mut-'));
   try {

@@ -34,10 +34,16 @@ jobs:
       - name: Engine tests
         run: node tools/engine-test.mjs
 
-      # 垃圾档与帧率闸：一条坏记录只丢那一条、彩带在 30/60/120Hz 下积出同一条轨迹。
+      # 垃圾档解码与动效定步长：一条坏记录只丢那一条，彩带在 30/60/120Hz 下积出同一条轨迹。
       # 这两件事在真浏览器里几乎不可测（帧率不由你定），所以钉在纯 node 这一层。
-      - name: Save decode and fixed-step ladder
+      - name: Save decode and fixed-step fx ladder
         run: node tools/store-fx-test.mjs
+
+      # 关卡**内**的三档对拍：真进对局、按整 100ms 刻度喂 30/60/120Hz，逐字段比用时时钟、
+      # sim 步数、步数/提示计费、已写/待写/成块/冲突/难度分与动效场，并自带一发阴性对照
+      # （把 fx.js 的 accum += elapsed 改成 += SIM_STEP，跑在 /tmp 的源码副本上，必须判红）。
+      - name: In-level frame-rate ladder (30/60/120Hz, same virtual time)
+        run: node tools/frame-ladder-test.mjs
 
       # §2 那批判据（静音真停 AudioContext、暂停真不推进仿真、重开真复位、触屏坐标按 CSS
       # 缩放换算、键位全覆盖、省动效真分支、全屏绑真实存在的 id）在 sellability 里只是字符串，

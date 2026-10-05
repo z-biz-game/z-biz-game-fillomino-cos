@@ -39,6 +39,18 @@ jobs:
       - name: Save decode and fixed-step ladder
         run: node tools/store-fx-test.mjs
 
+      # §2 那批判据（静音真停 AudioContext、暂停真不推进仿真、重开真复位、触屏坐标按 CSS
+      # 缩放换算、键位全覆盖、省动效真分支、全屏绑真实存在的 id）在 sellability 里只是字符串，
+      # 这里用一层最小 DOM 桩把 js/main.js 当真入口装载并读出数——纯 node，不需要 Chrome。
+      - name: Behavior gate (mute / pause / restart / touch scale / keys / reduced motion)
+        run: node tools/dom-behavior-test.mjs
+
+      # Pages 那条腿的拷贝清单与这里共用 tools/assemble_site.sh：装配完逐条核对
+      # index.html 与 manifest 声明过的每个同源路径都进了产物。清单漂移因此在 PR 上红，
+      # 而不是等部署站上图标、manifest、sw.js、纹理全 404 才发现。
+      - name: Site assembly ships every declared path
+        run: bash tools/assemble_site.sh "$RUNNER_TEMP/_site"
+
       # The ladder is a promise, not a caption: `TIERS[].band` is a selection target, and this
       # step goes red if a tier stops landing in its own band or the medians stop ordering.
       - name: Difficulty ladder is still measured

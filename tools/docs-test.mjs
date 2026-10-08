@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // 文档行号对账（零依赖，纯 node）——README / DESIGN 里印着的每一个 `path:NN` 都被读回来对账。
 //
-// 为什么要有这一支：两份文档里挂着 35 条「去看第 N 行」，写这句话的时候没有任何机器核过它。
+// 为什么要有这一支：文档里挂着成片的「去看第 N 行」，写这句话的时候没有任何机器核过它。
 // 改了代码不重编行号，文档不会响，读者按图索骥找到的是隔壁那行。这一腿把那句话变成一条会红的断言。
+// 条数不写在这里——本腿每次跑都当场数，写在注释里的那个数会在下一次改文档时变成第二句没人核的话。
 //
 // 口径与家族里其余几份（doublechoco / ferry / yajilin / echo-location / creek / lightsout / tapa /
 // triplets）同一份，不是这一仓自创：
@@ -18,8 +19,9 @@
 //
 // 这一腿不覆盖什么：它只证明印在纸上的行号还坐在它所描述的那几行上，不证明周围的句子；
 // 也不证明文档里那些没写成 `path:NN` 形状的说法。
-// 跑法：`npm run doctest` —— 同一条命令住在 tools/verify.sh 的单元段里（CI 的 browser job 跑 verify.sh，
-// 于是这一腿也在 CI 里被执行），本地整跑是 `bash tools/verify.sh`。
+// 跑法：`npm run doctest`；同一条命令挂在 tools/verify.sh 的 node 尾段（deploy-set 那两步旁边），
+// 所以 ci.yml 的 browser job 调 `bash tools/verify.sh` 时把它一起跑到——那是接线，
+// 跑没跑到由那一次 run 的读数说，本文件不复述远端形态。
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';

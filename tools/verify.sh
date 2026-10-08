@@ -132,6 +132,10 @@ if [ -n "${SHOTS:-}" ]; then
 fi
 
 kill $WD 2>/dev/null
+# 文档行号对账：README / DESIGN 里印着的每一个 `path:NN` 都要读回真文件对账（行号漂了文档不会响）。
+# 这一腿不碰 Chrome，和部署集闸一样住在 verify.sh 的 node 尾段——ci.yml 的 browser job 跑的就是这个脚本。
+echo "=== docs ==="
+node tools/docs-test.mjs || FAILED=1
 # 部署集闸：ci.yml 跑这两步、本地整闸以前一次都不跑。缺这一步就是「本地全绿、线上 404 自己的
 # manifest / sw.js / 图标」这一整类坏法。它不碰 Chrome，也不读页面，纯查产物。
 echo "=== deploy-set ==="

@@ -132,10 +132,16 @@ SHOTS=local bash tools/verify.sh                                  # 顺手把三
 ```
 npm run check                       每个源文件能解析
 npm test                            509 条引擎断言
+npm run doctest                     文档里印着的每个行号，读回真文件对账
 npm run balance                     六道关：阶梯单调 / 出货的盘独立计数同意 / 同盘重解同分 /
                                     种下的解过验收器 / 两道闸不空转 / 带只排序
-bash tools/verify.sh                上面两套 + 655 条真实浏览器断言
+bash tools/verify.sh                655 条真实浏览器断言 + 上面那套文档对账 + 部署集闸
 ```
+
+`npm run doctest` 管的是纸上的行号：文档每一处「去看第 N 行」都要落在盘上真实存在、且不是整段空白的
+那几行；贴着引用写的那个名字必须作为**完整标识符**出现在被指的那几行里（整词，不是子串——短名字坐在
+声明长标识符的那一行上也算"出现"，子串口径会把一次真的漂读成绿）。指向别的仓的那几处只数不判：单仓
+checkout 读不到别的仓的行号，拿它判红就是一条随环境漂的闸。这一腿不覆盖句子其余部分说得对不对。
 
 浏览器那 655 条来自 11 个场景、13 遍执行（`layout` 在三个窗口里各跑一遍），跑在真 headless Chrome 里，
 点的是真 DOM 与真 canvas：
@@ -178,7 +184,11 @@ BASE_URL=https://z-biz-game.github.io/z-biz-game-fillomino-cos/ bash tools/verif
 页内资源全部用相对路径，靠前缀 URL 解析。本地已推的两个形态：根形态与前缀形态各 **655/655**，
 逐场景条数一致。
 
-CI（`.github/workflows/ci.yml`）在没有 Chrome 的 runner 上跑 `check` + `npm test` + `SAMPLES=24 balance`，
+CI 有两个 job（`.github/workflows/ci.yml`），都跑在 `ubuntu-latest` 上。`syntax + engine guarantees` 是
+六个 node 步骤（`.github/workflows/ci.yml:25`、`:29`、`:34`、`:39`、`:44`、`:48`：check / engine / `SAMPLES=24` balance /
+入口文件 / 部署集闸 / 部署集闸的阴性自证），它不启动 Chrome。`real browser gate (both URL shapes)` 跑的是
+`bash tools/verify.sh` 这条命令本身（`.github/workflows/ci.yml:67`），文档对账与部署集两条 node 腿挂在它的尾段上，所以随它
+一起被执行——这一 job 的一次绿读数：`06309a3` 那一笔的 run 37459629951，8 个步骤、42 秒、日志 31593 字节。
 Pages 的产物只拷 `index.html` + `css/` + `js/`（服务器、electron、tools 和文档都不进 artifact）。
 
 ## 目录
@@ -194,6 +204,7 @@ js/store.js             localStorage（一个键）：设置、纪录、续局�
 js/theme.js             颜色与动效 token，图例与画布读同一份
 js/audio/synth.js       WebAudio 现场合成，零音频文件
 tools/engine-test.mjs   509 条引擎断言
+tools/docs-test.mjs     文档行号对账（每个印在纸上的行号都读回真文件）
 tools/balance.mjs       难度阶梯实测 + 六道关
 tools/scenarios.js      11 个浏览器场景的断言体（13 遍执行）
 tools/playtest.cjs      CDP 驱动（开页、求值、截图、跑场景）

@@ -188,7 +188,7 @@ CI 有两个 job（`.github/workflows/ci.yml`），都跑在 `ubuntu-latest` 上
 六个 node 步骤（`.github/workflows/ci.yml:25`、`:29`、`:34`、`:39`、`:44`、`:48`：check / engine / `SAMPLES=24` balance /
 入口文件 / 部署集闸 / 部署集闸的阴性自证），它不启动 Chrome。`real browser gate (both URL shapes)` 跑的是
 `bash tools/verify.sh` 这条命令本身（`.github/workflows/ci.yml:67`），文档对账与部署集两条 node 腿挂在它的尾段上，所以随它
-一起被执行——这一 job 的一次绿读数：`06309a3` 那一笔的 run 37459629951，8 个步骤、42 秒、日志 31593 字节。
+一起被执行——这一 job 的一次绿读数：`06309a3` 那一笔的 run 37459629951 的 browser job 112255666136：8 个步骤、42 秒、日志 33288 字节（按 `/actions/jobs/112255666136/logs` 当场取回，2026-10-08 复量；这里原先抄的 31593 既没点名 job 也没写尺子，而同一条 run 的另一个 job 是 12 步、28781 字节——不写地址的"日志大小"就是这种谁都复现不了的数）。
 Pages 的产物只拷 `index.html` + `css/` + `js/`（服务器、electron、tools 和文档都不进 artifact）。
 
 文档行号对账这一腿（`tools/docs-test.mjs`，挂在 `npm test` 与 `bash tools/verify.sh` 的尾段）本轮

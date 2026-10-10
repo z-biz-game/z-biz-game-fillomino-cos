@@ -61,7 +61,6 @@ let stroke = null;
 let startedAt = 0;
 let baseElapsed = 0;
 let ticker = 0;
-let paused = false;
 let raf = 0;
 let lastTs = 0;
 
@@ -259,32 +258,6 @@ function onWin() {
 
 // 暂停要停三样：走时的钟、动效的推进器、以及一切改棋盘输入的入口。少停一样，就是
 // "遮罩盖着、时间在跑、数字还在写"那种假暂停。
-function setPaused(v) {
-  const on = !!v;
-  if (on === paused) return paused;
-  // 没有牌局（或已经赢了）就不该被暂停；但"解除暂停"永远放行——回选档、清空存档之后
-  // 若把解除也一起挡掉，下一局就开在一颗 paused=true 的死棋上。
-  if (on && (!game || game.status === 'won')) return paused;
-  paused = on;
-  if (on) {
-    stopClock();
-    flushResume();
-    if (raf) {
-      cancelAnimationFrame(raf);
-      raf = 0;
-    }
-    lastTs = 0;
-  } else {
-    startClock();
-    if (fx.active()) kick();
-  }
-  el.pauseVeil.hidden = !on;
-  if (on) el.pauseMeta.textContent = `用时停在 ${fmtMs(clock())}，盘面不会替你多想一步。`;
-  el.pause.textContent = on ? '继续' : '暂停';
-  el.pause.setAttribute('aria-pressed', String(on));
-  document.body.classList.toggle('is-paused', on);
-  return paused;
-}
 
 const fullscreenNode = () => document.fullscreenElement || document.webkitFullscreenElement;
 
@@ -298,23 +271,6 @@ function syncFullscreen() {
 }
 
 // 按钮 id 必须挂在真实存在的节点上（el.full），并且拿不到权限时只是不动，不抛。
-async function toggleFullscreen() {
-  const node = fullscreenNode();
-  try {
-    if (node) {
-      const exit = document.exitFullscreen || document.webkitExitFullscreen;
-      if (exit) await exit.call(document);
-    } else {
-      const target = el.app || document.documentElement;
-      const req = target.requestFullscreen || target.webkitRequestFullscreen;
-      if (!req) return syncFullscreen();
-      await req.call(target, { navigationUI: 'hide' });
-    }
-  } catch {
-    /* 浏览器拒绝（非用户手势、iframe 没授权）就保持原样，游戏照玩 */
-  }
-  return syncFullscreen();
-}
 
 function toggleHelp(v) {
   const on = v === undefined ? el.helpVeil.hidden : !!v;

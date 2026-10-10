@@ -9,13 +9,13 @@
     "dev": "node server.cjs 5255",
     "electron": "electron .",
     "engine": "node tools/engine-test.mjs",
-    "test": "node tools/engine-test.mjs && node tools/store-fx-test.mjs && node tools/frame-ladder-test.mjs && node tools/dom-behavior-test.mjs",
-    "robust": "node tools/store-fx-test.mjs",
-    "ladder": "node tools/frame-ladder-test.mjs",
-    "behavior": "node tools/dom-behavior-test.mjs",
+    "test": "node tools/engine-test.mjs",
+    "doctest": "node tools/docs-test.mjs",
     "balance": "node tools/balance.mjs",
     "verify": "bash tools/verify.sh",
-    "check": "for f in js/*.js js/*/*.js; do node --check \"$f\" || exit 1; done && node --check server.cjs && node --check electron/main.cjs && for f in tools/*.mjs tools/scenarios.js; do node --check \"$f\" || exit 1; done && echo OK"
+    "check": "for f in js/*.js js/*/*.js; do node --check \"$f\" || exit 1; done && node --check server.cjs && node --check electron/main.cjs && for f in tools/*.mjs tools/scenarios.js; do node --check \"$f\" || exit 1; done && node --check \"electron/preload.cjs\" && echo OK",
+    "deploy-set": "node tools/deploy-set.mjs",
+    "deploy-set:selftest": "node tools/deploy-set-selftest.mjs"
   },
   "keywords": [
     "game",

@@ -131,16 +131,17 @@ SHOTS=local bash tools/verify.sh                                  # 顺手把三
 
 ```
 npm run check                       每个源文件能解析
-npm test                            1060 条纯 node 断言，四套：
-                                      509 引擎（唯一解 / 逐格复核 / 可达性全枚举 / 档位）
-                                      129 存档解码 + 动效定步长（垃圾档只丢那一条）
-                                      370 关卡内 30/60/120Hz 三档对拍（含阴性对照）
-                                       52 行为复验（静音真停 AudioContext / 暂停真不推进 /
-                                          重开真复位 / 触屏按 CSS 缩放换算 / 控件接线）
+npm test                            509 条引擎断言
+npm run doctest                     文档里印着的每个行号，读回真文件对账
 npm run balance                     六道关：阶梯单调 / 出货的盘独立计数同意 / 同盘重解同分 /
                                     种下的解过验收器 / 两道闸不空转 / 带只排序
-bash tools/verify.sh                上面四套 + 655 条真实浏览器断言
+bash tools/verify.sh                655 条真实浏览器断言 + 上面那套文档对账 + 部署集闸
 ```
+
+`npm run doctest` 管的是纸上的行号：文档每一处「去看第 N 行」都要落在盘上真实存在、且不是整段空白的
+那几行；贴着引用写的那个名字必须作为**完整标识符**出现在被指的那几行里（整词，不是子串——短名字坐在
+声明长标识符的那一行上也算"出现"，子串口径会把一次真的漂读成绿）。指向别的仓的那几处只数不判：单仓
+checkout 读不到别的仓的行号，拿它判红就是一条随环境漂的闸。这一腿不覆盖句子其余部分说得对不对。
 
 浏览器那 655 条来自 11 个场景、13 遍执行（`layout` 在三个窗口里各跑一遍），跑在真 headless Chrome 里，
 点的是真 DOM 与真 canvas：
@@ -183,8 +184,19 @@ BASE_URL=https://z-biz-game.github.io/z-biz-game-fillomino-cos/ bash tools/verif
 页内资源全部用相对路径，靠前缀 URL 解析。本地已推的两个形态：根形态与前缀形态各 **655/655**，
 逐场景条数一致。
 
-CI（`.github/workflows/ci.yml`）在没有 Chrome 的 runner 上跑 `check` + `npm test` + `SAMPLES=24 balance`，
+CI 有两个 job（`.github/workflows/ci.yml`），都跑在 `ubuntu-latest` 上。`syntax + engine guarantees` 是
+六个 node 步骤（`.github/workflows/ci.yml:25`、`:29`、`:34`、`:39`、`:44`、`:48`：check / engine / `SAMPLES=24` balance /
+入口文件 / 部署集闸 / 部署集闸的阴性自证），它不启动 Chrome。`real browser gate (both URL shapes)` 跑的是
+`bash tools/verify.sh` 这条命令本身（`.github/workflows/ci.yml:67`），文档对账与部署集两条 node 腿挂在它的尾段上，所以随它
+一起被执行——这一 job 的一次绿读数：`06309a3` 那一笔的 run 37459629951 的 browser job 112255666136：8 个步骤、42 秒、日志 33288 字节（按 `/actions/jobs/112255666136/logs` 当场取回，2026-10-08 复量；这里原先抄的 31593 既没点名 job 也没写尺子，而同一条 run 的另一个 job 是 12 步、28781 字节——不写地址的"日志大小"就是这种谁都复现不了的数）。
 Pages 的产物只拷 `index.html` + `css/` + `js/`（服务器、electron、tools 和文档都不进 artifact）。
+
+文档行号对账这一腿（`tools/docs-test.mjs`，挂在 `npm test` 与 `bash tools/verify.sh` 的尾段）本轮
+（2026-10-08，本机一次 `node tools/docs-test.mjs`）的读数：2 份文档 · 47 条引用 · 11 条带指认 · 5 条续引 ·
+0 条跨仓 · 文档行号对账 15 条判据，`rows: 15 fail: 0`。这六个数由这条腿逐处对账：文档里凡印着这些标签的地方
+都必须等于本轮实数，**一处都没印同样要红**（D10 抄写台账）。这一腿落地那一跑它自己先红了六条，原因就是这句：
+在它把等式装上之前，这份 README 从没抄过它的读数，"没抄"和"抄对了"在闸那里长得一模一样。三把只动文档、
+代码一行不碰的刀在带 `.git` 的副本上各红一次并点名对应标签，跑完树复原。
 
 ## 目录
 
@@ -199,16 +211,16 @@ js/store.js             localStorage（一个键）：设置、纪录、续局�
 js/theme.js             颜色与动效 token，图例与画布读同一份
 js/audio/synth.js       WebAudio 现场合成，零音频文件
 tools/engine-test.mjs   509 条引擎断言
-tools/store-fx-test.mjs   129 条：垃圾档解码与动效定步长
-tools/frame-ladder-test.mjs  370 条：关卡内 30/60/120Hz 同刻度对拍 + 阴性对照
-tools/dom-harness.mjs     最小 DOM/虚拟时钟桩（上面两套 node 行为闸共用）
-tools/dom-behavior-test.mjs  52 条：静音/暂停/重开/触屏缩放/键位/省动效/控件接线
+tools/docs-test.mjs     文档行号对账（每个印在纸上的行号都读回真文件）
 tools/balance.mjs       难度阶梯实测 + 六道关
 tools/scenarios.js      11 个浏览器场景的断言体（13 遍执行）
 tools/playtest.cjs      CDP 驱动（开页、求值、截图、跑场景）
 tools/verify.sh         一键：node 两套 + 真 Chrome
 server.cjs              零依赖静态服务器
 electron/               同一个产物的桌面壳，无构建步骤
+tools/assemble-site.sh  部署产物的唯一清单（pages.yml 与本地闸调同一支）
+tools/deploy-set.mjs  部署集闸：检查即将上传的那份产物
+tools/deploy-set-selftest.mjs  部署集闸的阴性自证（每一类断言当场打红一次）
 ```
 
 ## 已知边界
@@ -231,3 +243,49 @@ electron/               同一个产物的桌面壳，无构建步骤
 ## 许可
 
 MIT，见 `LICENSE`。
+
+## 上线的到底是哪一批文件
+
+这个仓没有打包器：站点=一次文件拷贝。以前「拷哪些」写在 `pages.yml` 的 `run:` 里（手抄的几行
+`cp`）。本地 `index.html` 直读仓库根，永远自洽；线上却按那份清单拷，于是页面后来引用的
+`manifest.webmanifest`、`sw.js`、`icons/*` 可能一个都没上去——线上 404，而仓里的引擎测试与
+真浏览器闸全绿，因为它们跑的都是仓库根，没有任何一步在「按清单拷」的那个环境下加载过页面。
+
+现在清单只有一份，住在 `tools/assemble-site.sh`：CI 调它拷 `_site`，本地闸调它拷临时目录，
+然后**对拷出来的产物**提要求（`tools/deploy-set.mjs`）：
+
+- **W 清单与页面同源**：`pages.yml` 里必须真有 `run: bash tools/assemble-site.sh <dir>` 这一行，
+  `ci.yml` 里必须真有 `run: node tools/deploy-set.mjs`。认的是调用那一行，不是文件里出现过这个
+  路径——注释里本来就会写它，只 grep 字符串会被一句散文喂绿。
+- **R 引用可达**：引用不靠手打名单。从 `index.html` 的 `href/src` 出发，凡解析出来是 `.js`/`.css`
+  的就把那一站也扫一遍（CSS 的 `url()`、JS 去掉注释后的 `'./…'` 字面量、`new URL(x, base)` 的两种
+  基、`navigator.serviceWorker.register`、`scope`），`manifest` 的 icons/screenshots/shortcuts 各自
+  的 `src` 也算引用。取径上读不到的那一站本身就是红（读不到＝这一站根本没扫）。每条引用都必须在
+  产物里且非 0 字节；绝对路径单列一条红，因为 Pages 挂在 `/<repo>/` 前缀下会跳出去。
+- **P 位图不许说谎**：`manifest` 声明的 `sizes` 必须等于 PNG IHDR 的真实宽高——文件图标读文件头，
+  内联成 base64 的图标先解码再读同一段。后一条不是可选项：图标可能住在清单里而不是盘上的 `.png`
+  （有的仓另有一条"零二进制文件"的承诺，那条只约束"有没有 .png 这个文件"）；如果 P 段只筛文件名，
+  声明写 512 而真图 192 就一路放行。
+- **钉住两个数**：R 段实际检查的路径条数（`26`）与这一次跑的断言条数（`44`），两个数
+  都钉在 `tools/deploy-set.mjs` 顶部的那对常量里。没改页面却掉了，说明解析断了；删掉一张图标会同时
+  少一条 R10 与那张的 P1/P2，所以两个数一起钉，断言条数能漂就是闸在缩水的信号。这一节故意只写数值、
+  不写那对常量的名字，也不写别仓文档闸的编号：有的仓的文档闸会拿"文档里出现过的同名标识号"回数它
+  自己的条数，还有的会把文档里点到的每个组编号逐个核对"这一轮真的发过"——两道闸共用一个名字，
+  或者在本仓的文档里出现一个本仓没有的组编号，打红的都是不相干的那一边。
+
+`tools/deploy-set-selftest.mjs` 是这两颗钉的阳性证明：它把仓库复制到临时目录，照着每一类断言
+各下一刀（X1 清单不收位图目录 / X2 模块边改名 / X3 CSS 写绝对路径 / X4 `start_url` 绝对 /
+X5 删光 >=512 图标 / X6 少一个必填字段 / X7 声明尺寸与真图不符 / X8 workflow 不调脚本 /
+X9 CI 不跑闸 / X10 是阴性对照——往入口 JS 追加一行只写在注释里的假路径，闸必须仍然绿、条数仍然
+`26`、断言仍然 `44`；X11 og:image 退回相对路径 / X12 og:image 的前缀指向别的 slug /
+X13 内联位图谎报尺寸——只在有靶子时下：X11/X12 要页面上那句 og:image，X13 要清单里真有一段 base64
+图标，没有就打印 SKIP；反过来 X1 没有位图目录可砍时改砍 css，P 段一位都不核时台架直接报靶子不够），
+要求每一刀都让闸**点名**变红。靶子从 `DEPLOY_SET_DUMP=1`
+的出处表现挑（取径真的会读的那支 JS / 那一张 CSS，不写死某一个仓的入口名），所以页面改了、仓与仓
+不同，台架跟着走。
+
+`node tools/deploy-set.mjs` 与 `node tools/deploy-set-selftest.mjs` 就是 CI 跑的那两条命令本身
+（package.json 里的 `deploy-set` / `deploy-set:selftest` 只是同一支脚本的 npm 入口）；本仓的整闸在 `tools/verify.sh` 的 `=== deploy-set ===` 那一段也各跑一次。它们红的时候并进本仓那条出口的退出码——这一条是这么证的：
+把 ci.yml 里那行 `run: node tools/deploy-set.mjs` 砍掉，本仓整闸必须点名红且退出码非 0。
+所以「本地全绿、线上 404 自己的 manifest / sw.js / 图标」这一类坏法在本地就会红。
+

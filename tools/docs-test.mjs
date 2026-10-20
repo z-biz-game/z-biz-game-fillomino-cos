@@ -157,7 +157,9 @@ function audit(text) {
 // 写死的清单会在有人新增一份 .md 的那天悄悄缩小样本，而它照样绿。
 // 也不许只挑仓根：哪天一份文档住进 docs/ 或某个子目录，`!f.includes('/')` 就把它悄悄关掉 ——
 // 那份就悄悄从样本里没了，而它照样绿。本仓今天的 .md 都还在仓根，这一句是给"以后那份"上的保险。
-const tracked = execFileSync('git', ['-C', ROOT, 'ls-files'], { encoding: 'utf8' }).split('\n').filter(Boolean);
+// `-z` 不是风格：git 默认 core.quotepath 会把非 ASCII 文件名包成 "\346\202\257.md"，那种条目 endsWith('.md') 判假，
+// 一份文档就这样被静默丢出输入集（腿照样印「全部在界内」）。按 NUL 切分，git 不再改写名字。
+const tracked = execFileSync('git', ['-C', ROOT, 'ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean);
 const docs = tracked.filter((f) => f.endsWith('.md') && !/changelog|license/i.test(f));
 const DOC_TEXT = docs.map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
 

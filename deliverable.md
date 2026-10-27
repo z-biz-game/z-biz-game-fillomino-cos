@@ -1,7 +1,7 @@
 # 埋方块 · Fillomino（零猜测区域格数推理） · 交付卡
 
 > 本文件由 `003_辅助能力/audit/script/gen_deliverable.py` 从本仓 README、package.json 与 `git ls-files` 生成，**不要手改**；改源后重跑，`--check` 必须逐字节一致。
-> 读数取自本仓 `git ls-files` 与 package.json；这里不写提交号，所以 `--check` 比的是内容，不是时间。
+> 读数取自本仓 `git ls-files` 与 package.json，均不含本文件自身；这里不写提交号，所以 `--check` 比的是内容，不是时间。
 
 ## 一句话
 

@@ -192,7 +192,7 @@ CI 有两个 job（`.github/workflows/ci.yml`），都跑在 `ubuntu-latest` 上
 Pages 的产物只拷 `index.html` + `css/` + `js/`（服务器、electron、tools 和文档都不进 artifact）。
 
 文档行号对账这一腿（`tools/docs-test.mjs`，挂在 `npm test` 与 `bash tools/verify.sh` 的尾段）本轮
-（2026-10-23，本机一次 `node tools/docs-test.mjs`）的读数：2 份文档 · 47 条引用 · 14 条带指认 · 5 条续引 ·
+（2026-10-27，本机一次 `node tools/docs-test.mjs`）的读数：3 份文档 · 49 条引用 · 14 条带指认 · 5 条续引 ·
 0 条跨仓 · 文档行号对账 15 条判据，`rows: 15 fail: 0`。这六个数由这条腿逐处对账：文档里凡印着这些标签的地方
 都必须等于本轮实数，**一处都没印同样要红**（D10 抄写台账）。这一腿落地那一跑它自己先红了六条，原因就是这句：
 在它把等式装上之前，这份 README 从没抄过它的读数，"没抄"和"抄对了"在闸那里长得一模一样。三把只动文档、

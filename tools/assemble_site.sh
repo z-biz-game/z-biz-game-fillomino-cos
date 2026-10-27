@@ -18,5 +18,9 @@ rm -rf "$DEST"
 mkdir -p "$DEST"
 cp "$HERE/index.html" "$HERE/manifest.webmanifest" "$HERE/sw.js" "$DEST/"
 cp -r "$HERE/css" "$HERE/js" "$HERE/assets" "$DEST/"
+# 位图目录名不统一（icons/ 与 screenshots/ 都在用）：按存在与否收，缺的那个不是错误。
+for d in icons screenshots; do
+  [ -d "$HERE/$d" ] && cp -r "$HERE/$d" "$DEST/"
+done
 
 node "$HERE/tools/check_site_ships.mjs" "$DEST"

@@ -2,7 +2,7 @@
 // 部署集闸：按 pages.yml 用的那份清单真拷一遍产物，然后要求「页面会去要的东西」都在产物里。
 //
 // 这里防的是一整类本地看不见、CI 也不红的坏法：仓里没有构建步骤，index.html 直读仓库根，
-// 所以本地永远自洽；上线的站点却是 tools/assemble-site.sh 拷出来的那一份。清单落后于页面
+// 所以本地永远自洽；上线的站点却是 tools/assemble_site.sh 拷出来的那一份。清单落后于页面
 // （加了 manifest/图标/SW 却忘了加进 cp），线上就是 404，而引擎测试、浏览器闸全都跑的是
 // 仓库根，一条都不会红。这个闸跑的是**产物**。
 //
@@ -28,14 +28,14 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ASSEMBLE = 'tools/assemble-site.sh';
+const ASSEMBLE = 'tools/assemble_site.sh';
 // R 段实际检查的路径条数。改页面/清单会改变它——那正是要它变的时候；没改页面却掉了，
 // 说明引用解析不出来的那部分被悄悄放过了。对着 DEPLOY_SET_DUMP=1 的出处表能逐条核。
-const EXPECT_CHECKS = 26;
+const EXPECT_CHECKS = 31;
 // 全绿时这个闸实际跑的断言条数（W/R/P 三段之和）。钉住它，「少一条断言」就不可能是绿的：
 // 删掉 manifest 里的一张图标会同时少一条 R10 与那张的 P1/P2 两行——那条路径缺文件本来就该红，
 // 但 rows 能漂就是闸在缩水的信号，所以两个数一起钉。
-const EXPECT_ROWS = 45;
+const EXPECT_ROWS = 50;
 
 let rows = 0;
 const fails = [];
@@ -49,13 +49,13 @@ const readIf = (p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null);
 // ---- A：清单与页面同源 ----
 // 认的是**调用那一行**，不是文件里出现过这个路径：workflow 的注释本来就会解释为什么用脚本，
 // 只 grep 字符串的断言会被一句散文喂绿——那正是这一路闸在别处犯过的错。
-const ASSEMBLE_CALL = /(^|\n)[ \t]*run:[ \t]*(?:bash|sh)[ \t]+tools\/assemble-site\.sh[ \t]+\S/;
+const ASSEMBLE_CALL = /(^|\n)[ \t]*run:[ \t]*(?:bash|sh)[ \t]+tools\/assemble_site\.sh[ \t]+\S/;
 const GATE_CALL = /(^|\n)[ \t]*run:[ \t]*node[ \t]+tools\/deploy-set\.mjs\b/;
 const wf = readIf(path.join(ROOT, '.github/workflows/pages.yml'));
 ok(wf !== null, 'W1 workflow/pages.yml 读得到', wf === null ? '文件不存在' : '');
 if (wf !== null) {
-  ok(ASSEMBLE_CALL.test(wf), 'W2 pages.yml 里真的调了 tools/assemble-site.sh',
-    'pages.yml 没有 run: bash tools/assemble-site.sh <dir>：CI 拷的是另一份清单，本闸验的不是上线那份');
+  ok(ASSEMBLE_CALL.test(wf), 'W2 pages.yml 里真的调了 tools/assemble_site.sh',
+    'pages.yml 没有 run: bash tools/assemble_site.sh <dir>：CI 拷的是另一份清单，本闸验的不是上线那份');
 }
 const ci = readIf(path.join(ROOT, '.github/workflows/ci.yml'));
 ok(ci !== null, 'W3 workflow/ci.yml 读得到', ci === null ? '文件不存在' : '');

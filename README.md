@@ -45,7 +45,7 @@ SHOTS=local bash tools/verify.sh                                  # 顺手把三
 - **拖动** 一次连续写同一个数，整笔算一步、一次撤销全撤；拖过印着的数那几格被跳过。
 - **换一局** 抽一个新 seed；**回选档** 随时换档，当前这局会存成续局。
 - 纪录按档各存一份，排序先看**没求提示的次数**，再看步数，最后看时间
-  （`js/store.js:95` 的 `Store.recordBest`）——建立在六次提示上的快局不是「我自己推出来的」。
+  （`js/store.js:216` 的 `Store.recordBest`）——建立在六次提示上的快局不是「我自己推出来的」。
 - 进度与纪录只写在本机 `localStorage`（键 `fillomino.save.v1`），没有服务端。
 
 ## 一条规则，四条推论
@@ -223,7 +223,7 @@ tools/playtest.cjs      CDP 驱动（开页、求值、截图、跑场景）
 tools/verify.sh         一键：node 两套 + 真 Chrome
 server.cjs              零依赖静态服务器
 electron/               同一个产物的桌面壳，无构建步骤
-tools/assemble-site.sh  部署产物的唯一清单（pages.yml 与本地闸调同一支）
+tools/assemble_site.sh  部署产物的唯一清单（pages.yml 与本地闸调同一支）
 tools/deploy-set.mjs  部署集闸：检查即将上传的那份产物
 tools/deploy-set-selftest.mjs  部署集闸的阴性自证（每一类断言当场打红一次）
 ```
@@ -256,10 +256,10 @@ MIT，见 `LICENSE`。
 `manifest.webmanifest`、`sw.js`、`icons/*` 可能一个都没上去——线上 404，而仓里的引擎测试与
 真浏览器闸全绿，因为它们跑的都是仓库根，没有任何一步在「按清单拷」的那个环境下加载过页面。
 
-现在清单只有一份，住在 `tools/assemble-site.sh`：CI 调它拷 `_site`，本地闸调它拷临时目录，
+现在清单只有一份，住在 `tools/assemble_site.sh`：CI 调它拷 `_site`，本地闸调它拷临时目录，
 然后**对拷出来的产物**提要求（`tools/deploy-set.mjs`）：
 
-- **W 清单与页面同源**：`pages.yml` 里必须真有 `run: bash tools/assemble-site.sh <dir>` 这一行，
+- **W 清单与页面同源**：`pages.yml` 里必须真有 `run: bash tools/assemble_site.sh <dir>` 这一行，
   `ci.yml` 里必须真有 `run: node tools/deploy-set.mjs`。认的是调用那一行，不是文件里出现过这个
   路径——注释里本来就会写它，只 grep 字符串会被一句散文喂绿。
 - **R 引用可达**：引用不靠手打名单。从 `index.html` 的 `href/src` 出发，凡解析出来是 `.js`/`.css`

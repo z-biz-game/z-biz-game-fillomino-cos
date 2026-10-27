@@ -156,19 +156,24 @@ function knife(tag, want, mutate, note) {
 
 let bad = 0;
 
-// X1 清单落后于页面：assemble 少收一类文件，产物里没有它而页面会去要。
-// 有位图目录（这一仓 55/59 走 icons/，2 个走 assets/）就砍那个 for 循环，期望由靶子自己决定，
-// 两个目录名都在针里；内联位图的仓没有位图目录可砍，就砍无条件那行的 css。
+// X1 清单落后于页面：产物里少一类文件，而页面会去要。刀口统一落在装配自检之后删除产物里的
+// 一张位图（没有位图引用就删一份 CSS），期望由靶子自己决定；这样与装配脚本的实现解耦，
+// 也不至于让自检抢在 deploy-set 前面退出。
 if (pngRefs.length) {
   if (!knife('X1 assemble 不收位图目录', ['R10', path.basename(pngRefs[0].target)], (dir) => {
-    edit(dir, 'tools/assemble-site.sh', 'for d in icons assets; do', 'for d in probe_missing_dir; do');
+    // 现行装配脚本自己会调 check_site_ships：漏拷在装配阶段就非 0 退出，deploy-set 只会打印
+    // FATAL 而不点名 —— 那样这一刀就证不了 R10 会红。所以刀口落在自检**之后**：装配照常成功，
+    // 产物里缺这一张，R10 必须点名。
+    edit(dir, 'tools/assemble_site.sh', 'node "$HERE/tools/check_site_ships.mjs" "$DEST"',
+      `node "$HERE/tools/check_site_ships.mjs" "$DEST"\nrm -f "$DEST/${pngRefs[0].target}"`);
   })) bad += 1;
 } else {
   if (!cssRefInArtifact) {
     line('X1 INERT · 这一仓既没有位图目录可砍，index.html 也没引到一份在产物里的 CSS');
     bad += 1;
   } else if (!knife('X1 assemble 不收 css 目录', ['R10', path.basename(cssRefInArtifact.target)], (dir) => {
-    edit(dir, 'tools/assemble-site.sh', 'cp -r css js "$DEST/"', 'cp -r js "$DEST/"');
+    edit(dir, 'tools/assemble_site.sh', 'node "$HERE/tools/check_site_ships.mjs" "$DEST"',
+      `node "$HERE/tools/check_site_ships.mjs" "$DEST"\nrm -f "$DEST/${cssRefInArtifact.target}"`);
   })) bad += 1;
 }
 
@@ -251,7 +256,7 @@ if (dataIcons.length) {
 // X8 workflow 不走那份清单（回到手抄三行的世界）。针打的是**调用那一行**：pages.yml 的注释里
 // 也写着这个路径，拿路径当针会命中两次，edit() 会拒绝——那正是 W2 不该认散文的理由。
 if (!knife('X8 pages.yml 不调 assemble', ['W2'], (dir) => {
-  edit(dir, '.github/workflows/pages.yml', 'run: bash tools/assemble-site.sh _site',
+  edit(dir, '.github/workflows/pages.yml', 'run: bash tools/assemble_site.sh _site',
     'run: mkdir -p _site && cp index.html _site/');
 })) bad += 1;
 

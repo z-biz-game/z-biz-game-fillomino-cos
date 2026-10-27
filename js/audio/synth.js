@@ -10,6 +10,9 @@ let enabled = true;
 try {
   if (localStorage.getItem('cos.mute') === '1') enabled = false;
 } catch { /* 读不到就沿用默认开声 */ }
+// 计数是为了让"静音"这两个字可被验伪：关掉音效之后再按十次格子，这个数必须一动不动。
+let voices = 0;
+let resumes = 0;
 
 
 function audio() {

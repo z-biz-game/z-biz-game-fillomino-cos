@@ -306,7 +306,7 @@
     eq('标题是埋方块', text('#app h1'), '埋方块');
     ck('副标题点出玩法', /Fillomino/.test(text('.brand .sub')), text('.brand .sub'));
     ck('一句话讲清面积规则', /格数刚好等于它写着的那个数/.test(text('.menu-hero h2')), text('.menu-hero h2'));
-    eq('玩法说明写了四条规则', document.querySelectorAll('.rules li').length, 4);
+    eq('玩法说明写了四条规则', document.querySelectorAll('#help-veil .rules li').length, 4);
     eq('档位按钮五个', document.querySelectorAll('#tier-list .tier').length, 5);
     ck('档位按钮写着尺寸与最大块', [...document.querySelectorAll('#tier-list .tier')].every((x) => /×/.test(x.textContent) && /最大 \d 块/.test(x.textContent)));
     ck('档位按钮写着实测分', [...document.querySelectorAll('#tier-list .tier')].every((x) => /实测 \d+–\d+/.test(x.textContent)));
